@@ -29,6 +29,20 @@ Use the [Helix guide](docs/helix.md) to launch it from your editor. `java @cmd/t
 with assertions and rejects a zero-test run. Its deliberate adapter-failure test emits an expected
 SEVERE log; the final test summary determines success.
 
+For editor use, add the checkout's `bin/` directory to your `PATH`, or link its launcher into
+a directory already on `PATH`:
+
+```sh
+mkdir -p "$HOME/.local/bin"
+ln -s "$PWD/bin/shrink" "$HOME/.local/bin/shrink"
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Run those commands from the shrink checkout after building. The executable `shrink` launcher finds
+its own module paths, including through symlinks, and works from any project directory. It uses
+`java` from the inherited `PATH`; `JAVA_HOME` alone does not select the executable. Launch Helix
+from the development shell that selects your JDK. The current server still requires JDK 25.
+
 ## What it does
 
 - Parses open Java documents, including `module-info.java`, without a project model.

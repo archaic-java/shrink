@@ -1,30 +1,40 @@
 # Use shrink with Helix
 
-Build and test shrink using the README commands. Keep JDK 25 installed; a Java 17 runtime or
-a newer JDK selected accidentally is not the supported configuration.
+Build and test shrink using the README commands, then put the `bin/shrink` launcher on `PATH`
+as described there. Select JDK 25's `java` on `PATH` before starting Helix. The current server
+requires JDK 25; this launcher does not change its supported Java versions.
 
 Add this to `~/.config/helix/languages.toml`, or `.helix/languages.toml` in your project.
-Replace all example paths with absolute paths on your machine:
 
 ```toml
 [language-server.shrink]
-command = "/absolute/path/to/jdk-25/bin/java"
-args = [
-  "--module-path", "/absolute/path/to/shrink/out:/absolute/path/to/shrink/lib/bin",
-  "--add-modules", "org.eclipse.parsson",
-  "--module", "work.archaic.shrink/work.archaic.shrink.Main"
-]
+command = "shrink"
 
 [[language]]
 name = "java"
 language-servers = ["shrink"]
 ```
 
-Absolute paths matter because Helix normally starts the server from the edited project's directory.
-An absolute path to `@cmd/run` would not fix the relative module paths inside that argument file.
-The colon module-path separator in this example is for Linux/macOS. The provider module is
-resolved explicitly; no classpath fallback is needed. This replaces Helix's default Java server
-selection, so it works without jdtls installed.
+The launcher resolves shrink's module paths relative to its installation, including when installed
+through a symlink. It preserves the project's working directory and uses `exec java` so the Java
+process receives the editor's signals directly. No JDK or installation paths belong in the Helix
+configuration. This replaces Helix's default Java server selection and works without jdtls installed.
+
+## Select the JDK
+
+Start Helix from the project's development shell, with its JDK on `PATH`:
+
+```sh
+command -v java
+java --version
+hx .
+```
+
+A Nix development shell or another environment manager can select that JDK. Setting `JAVA_HOME`
+alone is insufficient: the launcher deliberately uses `java` on `PATH`.
+
+Helix inherits the environment when it starts. Changing Java in another shell and running
+`:lsp-restart` does not update Helix's environment; reopen Helix from the intended development shell.
 
 ## Check the integration
 
@@ -46,7 +56,8 @@ Optional inline presentation in `~/.config/helix/config.toml`:
 cursor-line = "warning"
 ```
 
-If startup fails, check `java --version` using the exact configured executable, run `hx --health java`,
+If startup fails, check `command -v shrink`, `command -v java`, and `java --version` in the shell
+used to start Helix, run `hx --health java`,
 and inspect Helix's `:log-open` output. A missing catalog module means the pinned sibling setup or
 compile step is incomplete. A missing JSON provider means the JARs or module-path entries are missing.
 Do not launch the server through a shell command that prints a banner to stdout.

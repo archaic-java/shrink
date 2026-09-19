@@ -1,0 +1,32 @@
+#!/bin/sh
+set -eu
+
+# Resolve the installation even when launched through a symlink on PATH.
+shrink_launcher=$0
+case "$shrink_launcher" in
+  */*) ;;
+  *) shrink_launcher=$(command -v "$shrink_launcher") ;;
+esac
+case "$shrink_launcher" in
+  /*) ;;
+  *) shrink_launcher="$PWD/$shrink_launcher" ;;
+esac
+shrink_links=0
+while [ -L "$shrink_launcher" ]; do
+  shrink_links=$((shrink_links + 1))
+  if [ "$shrink_links" -gt 40 ]; then
+    echo "shrink: too many launcher symlinks" >&2
+    exit 1
+  fi
+  shrink_directory=$(CDPATH= cd -P "$(dirname "$shrink_launcher")" && pwd)
+  shrink_launcher=$(readlink "$shrink_launcher")
+  case "$shrink_launcher" in
+    /*) ;;
+    *) shrink_launcher="$shrink_directory/$shrink_launcher" ;;
+  esac
+done
+shrink_root=$(CDPATH= cd -P "$(dirname "$shrink_launcher")/.." && pwd)
+
+exec java --module-path "$shrink_root/out:$shrink_root/lib/bin" \
+  --add-modules org.eclipse.parsson \
+  --module work.archaic.shrink/work.archaic.shrink.Main "$@"
