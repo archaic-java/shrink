@@ -17,13 +17,14 @@ import javax.tools.ToolProvider;
 import work.archaic.service.compiler.v01.*;
 
 /**
- * Java 25 syntax analysis through public javac APIs. Each invocation owns all compiler resources.
+ * Syntax analysis using the running JDK's default language level through public javac APIs.
+ * Requires JDK 25 or newer. Each invocation owns all compiler resources.
  * Instantiate explicitly; no provider registry is required. Preview features are disabled.
  */
 public final class JavacCompiler implements CompilerAdapter {
   public JavacCompiler() {
-    if (Runtime.version().feature() != 25) {
-      throw new IllegalStateException("shrink requires JDK 25 (preview disabled)");
+    if (Runtime.version().feature() < 25) {
+      throw new IllegalStateException("shrink requires JDK 25 or newer (preview disabled)");
     }
     if (ToolProvider.getSystemJavaCompiler() == null) {
       throw new IllegalStateException("The jdk.compiler module is required");
@@ -42,8 +43,9 @@ public final class JavacCompiler implements CompilerAdapter {
           return source.text();
         }
       };
+      // Leave the source level unspecified so syntax follows the running JDK, not our build baseline.
       var task = (JavacTask) compiler.getTask(auxiliary, files, collected,
-          List.of("-source", "25", "-proc:none", "-Xlint:none", "-Xmaxerrs", "100"),
+          List.of("-proc:none", "-Xlint:none", "-Xmaxerrs", "100"),
           null, List.of(unit));
       task.parse();
       var diagnostics = new ArrayList<Diagnostic>();

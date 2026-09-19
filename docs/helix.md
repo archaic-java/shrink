@@ -1,8 +1,8 @@
 # Use shrink with Helix
 
 Build and test shrink using the README commands, then put the `bin/shrink` launcher on `PATH`
-as described there. Select JDK 25's `java` on `PATH` before starting Helix. The current server
-requires JDK 25; this launcher does not change its supported Java versions.
+as described there. Select a JDK 25 or newer `java` on `PATH` before starting Helix. Shrink uses
+that JDK's own parser and default language level; preview features remain disabled.
 
 Add this to `~/.config/helix/languages.toml`, or `.helix/languages.toml` in your project.
 
@@ -32,6 +32,11 @@ hx .
 
 A Nix development shell or another environment manager can select that JDK. Setting `JAVA_HOME`
 alone is insufficient: the launcher deliberately uses `java` on `PATH`.
+
+Changing the selected JDK changes the syntax available to shrink without changing this Helix
+configuration or rebuilding shrink. A JDK 25 process cannot parse a later release's new syntax;
+launch with that later JDK instead. Only JDK 25 is currently verified. New syntax support is a goal,
+not a guarantee that future features such as completion or refactoring understand every new construct.
 
 Helix inherits the environment when it starts. Changing Java in another shell and running
 `:lsp-restart` does not update Helix's environment; reopen Helix from the intended development shell.

@@ -4,13 +4,28 @@ Shrink reports Java syntax errors in your editor using supported JDK compiler AP
 It analyzes the current text, including unsaved changes, and clears diagnostics when you fix them.
 The first release implements LSP 3.17 push diagnostics over stdin/stdout.
 
-Requires **JDK 25**, with preview features disabled. There is no Maven or Gradle build.
+**Shrink uses your JDK's own parser, making new Java syntax available without waiting for a shrink
+grammar update.** Its goal is to accept new non-preview syntax as the selected JDK introduces it.
+
+Requires **JDK 25 or newer**, with preview features disabled. There is no Maven or Gradle build.
 All application and library dependencies are explicit JPMS modules.
+
+## Java versions and feature scope
+
+Shrink is built with `--release 25`. The JDK running it determines the source language level:
+launching the same compiled shrink with a newer JDK selects that JDK's parser. There is no fixed
+source version, project language-level override, or preview switch in this release.
+
+This is a goal for syntax diagnostics, not a promise that every future shrink feature understands
+every new language construct. Features such as completion, navigation, outline or refactoring may
+need explicit updates even when the compiler already parses the construct. We currently verify
+only the pinned JDK 25 baseline; newer runtimes are accepted without claiming tested compatibility
+with every release or guaranteeing release-day support.
 
 ## Build and run
 
 Clone shrink into a parent directory that can also hold its pinned `minau` and `service-catalog`
-sibling checkouts. Select JDK 25 for both `java` and `javac`, then run from the shrink directory:
+sibling checkouts. Use JDK 25 for the verified build/test baseline, then run from the shrink directory:
 
 ```sh
 bash scripts/checkout-dependencies
@@ -41,7 +56,7 @@ export PATH="$HOME/.local/bin:$PATH"
 Run those commands from the shrink checkout after building. The executable `shrink` launcher finds
 its own module paths, including through symlinks, and works from any project directory. It uses
 `java` from the inherited `PATH`; `JAVA_HOME` alone does not select the executable. Launch Helix
-from the development shell that selects your JDK. The current server still requires JDK 25.
+from the development shell that selects your JDK (25 or newer); its parser determines the Java syntax.
 
 ## What it does
 

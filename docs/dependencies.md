@@ -1,7 +1,9 @@
 # Dependencies
 
-Use JDK 25 without preview features. CI pins Eclipse Temurin `25.0.4+7.0.LTS` (runtime build
-25.0.4+7-LTS) and uses the same checked-in argument files as local development.
+Build shrink with `--release 25`, without preview features. Runtime accepts JDK 25 or newer and
+uses its default source language level. CI verifies only Eclipse Temurin `25.0.4+7.0.LTS` (runtime
+build 25.0.4+7-LTS), using the same checked-in argument files as local development. There is no
+multi-JDK or early-access matrix; newer runtimes are accepted but not verified by this workflow.
 
 ## Source modules
 
