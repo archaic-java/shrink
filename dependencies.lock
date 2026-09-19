@@ -1,0 +1,3 @@
+# Source repository, immutable commit, sibling checkout directory.
+archaic-java/minau 13808cc18f93005fb88f5510d37bd2785a435578 minau
+archaic-java/service-catalog a1b8d4ab43e92647693f2e92933e1f2df99a1476 service-catalog

@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+shrink_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+while read -r repository revision sibling; do
+  [[ -z "$repository" || "$repository" == \#* ]] && continue
+  dependency_path="$shrink_root/../$sibling"
+  if [[ ! -e "$dependency_path" ]]; then
+    git clone --no-checkout "https://github.com/$repository.git" "$dependency_path"
+    git -C "$dependency_path" checkout --detach "$revision"
+  else
+    actual_revision=$(git -C "$dependency_path" rev-parse HEAD)
+    if [[ "$actual_revision" != "$revision" || -n "$(git -C "$dependency_path" status --porcelain)" ]]; then
+      echo "Expected clean $sibling checkout at $revision; existing checkout was left unchanged." >&2
+      exit 1
+    fi
+  fi
+done < "$shrink_root/dependencies.lock"

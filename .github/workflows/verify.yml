@@ -1,0 +1,35 @@
+name: Verify
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          path: shrink
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '25.0.4+7.0.LTS'
+      - name: Check out pinned source dependencies
+        working-directory: shrink
+        run: bash scripts/checkout-dependencies
+      - name: Verify JDK and binary modules
+        working-directory: shrink
+        run: |
+          java --version
+          javac --version
+          sha256sum -c lib/checksums.sha256
+          jar --describe-module --file lib/bin/jakarta.json-api-2.1.3.jar
+          jar --describe-module --file lib/bin/parsson-1.1.7.jar
+      - name: Compile
+        working-directory: shrink
+        run: javac @cmd/compile
+      - name: Run Minau and real-process LSP tests
+        working-directory: shrink
+        run: java @cmd/test
