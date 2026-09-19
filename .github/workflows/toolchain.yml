@@ -1,4 +1,4 @@
-name: Prepare implementation toolchain
+name: Prepare Helix smoke test
 on: push
 permissions:
   contents: read
@@ -6,22 +6,10 @@ jobs:
   prepare:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '25.0.4+7.0.LTS'
-      - name: Collect toolchain
-        shell: bash
-        run: |
-          mkdir -p transfer/lib
-          curl --fail --location --retry 3 https://repo.maven.apache.org/maven2/jakarta/json/jakarta.json-api/2.1.3/jakarta.json-api-2.1.3.jar -o transfer/lib/jakarta.json-api-2.1.3.jar
-          curl --fail --location --retry 3 https://repo.maven.apache.org/maven2/org/eclipse/parsson/parsson/1.1.7/parsson-1.1.7.jar -o transfer/lib/parsson-1.1.7.jar
-          sha256sum transfer/lib/*.jar
-          jar --describe-module --file transfer/lib/jakarta.json-api-2.1.3.jar
-          jar --describe-module --file transfer/lib/parsson-1.1.7.jar
-          tar -czf transfer/jdk.tar.gz -C "$JAVA_HOME" .
+      - name: Collect Helix
+        run: curl --fail --location --retry 3 https://github.com/helix-editor/helix/releases/download/25.07.1/helix-25.07.1-x86_64-linux.tar.xz -o helix.tar.xz
       - uses: actions/upload-artifact@v4
         with:
-          name: implementation-toolchain
-          path: transfer/
+          name: helix-smoke-tool
+          path: helix.tar.xz
           retention-days: 1
