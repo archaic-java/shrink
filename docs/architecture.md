@@ -5,7 +5,7 @@ Shrink has three modules:
 | Module | Responsibility |
 |---|---|
 | `work.archaic.shrink` | Stdio transport, JSON mapping, lifecycle, document snapshots and scheduling |
-| `work.archaic.shrink.compiler` | Synchronous Java 25 parser with supported compiler APIs |
+| `work.archaic.shrink.compiler` | Synchronous adapter to the running JDK's parser, using supported compiler APIs |
 | `work.archaic.shrink.test` | Minau suites and real-process protocol tests |
 
 The compiler module implements `work.archaic.service.compiler.v01` in service-catalog.
@@ -37,8 +37,19 @@ The checked `ParseException` distinguishes an adapter failure from ordinary synt
 an empty successful result. Results echo the immutable source identity and defensively copy
 diagnostics and source-less notices. Calls can execute concurrently because each creates its own
 compiler, task and file manager. The parser does not read source from disk or resolve project
-dependencies. It calls only `JavacTask.parse()`, with `-source 25`, `-proc:none`, no lint, and a
-100-error limit. JDK 25 is checked at construction; preview syntax is disabled.
+dependencies. It calls only `JavacTask.parse()`, with `-proc:none`, no lint, and a 100-error limit.
+Construction requires JDK 25 or newer; preview syntax is disabled. No source/release option is
+passed to the embedded compiler, so parsing follows the running JDK's default language level.
+
+Shrink's own build retains `--release 25`. This is separate from the source language of the documents
+it parses. A newer JDK can supply new syntax without a shrink grammar update or a new shrink build.
+There is currently no project language-level override: choose the appropriate JDK when launching.
+
+New non-preview syntax support is the goal. It does not imply automatic support for every new
+construct in every future feature. Diagnostics forward compiler results without interpreting tree
+nodes; completion, navigation, outline and refactoring may need construct-specific implementations.
+Verification remains on pinned JDK 25 only, with no multi-release or early-access test matrix.
+Accepting newer runtimes is not a claim that all future releases have been tested.
 
 The catalog has no document versions or close/reopen tokens. These belong to the caller; shrink's
 `Documents.Work` retains source, version and generation around each invocation. This reconciles

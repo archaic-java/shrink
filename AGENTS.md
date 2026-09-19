@@ -1,6 +1,10 @@
 # shrink
 
-- Use JDK 25, preview disabled. Compile and launch only through JDK tools and named JPMS modules.
+- Build with `--release 25`; accept JDK 25 and newer at runtime, preview disabled.
+  Parse with the running JDK's default source level, not a fixed source/release option.
+  Compile and launch only through JDK tools and named JPMS modules.
+- Verify on the pinned JDK 25 baseline only for now; do not add a multi-JDK or early-access matrix.
+  New syntax support is a goal, not a guarantee that every future feature handles every new construct.
 - Canonical commands from this directory: `javac @cmd/compile`, `java @cmd/test`, `java @cmd/run`.
 - Do not add Maven, Gradle, classpath dependencies, automatic modules, compiler internals,
   generated protocol bindings, annotation processing or reflective application dispatch.

@@ -3,6 +3,11 @@
 Verified during implementation on 2026-09-19 using Linux, Eclipse Temurin JDK 25.0.4+7-LTS,
 and the exact source and binary pins in `dependencies.lock` and `lib/checksums.sha256`.
 
+The runtime policy now accepts JDK 25 and newer and delegates source syntax to the running JDK.
+Verification remains on the pinned JDK 25 baseline only. We do not currently test multiple JDK
+versions or early-access builds. New syntax support is an architectural goal, not a guarantee of
+tested compatibility with every future release or construct support in every future LSP feature.
+
 ## Automated checks
 
 ```sh
