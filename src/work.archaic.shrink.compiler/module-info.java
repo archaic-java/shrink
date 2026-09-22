@@ -2,6 +2,7 @@
 module work.archaic.shrink.compiler {
   requires java.compiler;
   requires jdk.compiler;
-  requires transitive work.archaic.service.catalog;
-  exports work.archaic.shrink.compiler;
+  requires work.archaic.service.catalog;
+  provides work.archaic.service.compiler.v01.CompilerAdapter
+      with work.archaic.shrink.compiler.JavacCompiler;
 }

@@ -5,19 +5,28 @@ Shrink has three modules:
 | Module | Responsibility |
 |---|---|
 | `work.archaic.shrink` | Stdio transport, JSON mapping, lifecycle, document snapshots and scheduling |
-| `work.archaic.shrink.compiler` | Synchronous adapter to the running JDK's parser, using supported compiler APIs |
+| `work.archaic.shrink.compiler` | Service provider for synchronous parsing with the running JDK, using supported compiler APIs |
 | `work.archaic.shrink.test` | Minau suites and real-process protocol tests |
 
-The compiler module implements `work.archaic.service.compiler.v01` in service-catalog.
-The server chooses `new JavacCompiler()` explicitly. The compiler exports only its concrete entry
-point; its descriptor requires the catalog transitively because its public API uses catalog types.
-The server's implementation packages have only narrow qualified exports to its test module.
+The compiler module provides `work.archaic.service.compiler.v01.CompilerAdapter` from
+service-catalog. The server resolves exactly one provider through `ServiceLoader`; the provider
+module is an explicit runtime root in the command files and launcher. The compiler exports no
+implementation package and requires the catalog only for its provider contract. The server's
+implementation packages have only narrow qualified exports to its test module.
+
+Shrink uses Peep's logging v02 provider. At composition, it resolves exactly one `Diagnostics`,
+`Log` and compiler adapter. `language-server.serve` owns the complete editor session, including
+LSP responses on its event-loop thread. `diagnostics.analyze` is the independent goal for each
+document snapshot on the parser worker. A broken stream is noted on the serving goal, which then
+fails when the session ends abnormally; a failed adapter attempt reports separately through its
+analysis goal. These goals never nest on one thread.
 
 ## Compiler contract
 
 ```java
 module example.consumer {
-    requires work.archaic.shrink.compiler;
+    requires work.archaic.service.catalog;
+    uses work.archaic.service.compiler.v01.CompilerAdapter;
 }
 ```
 
@@ -25,13 +34,18 @@ module example.consumer {
 import java.net.URI;
 import work.archaic.service.compiler.v01.CompilerAdapter;
 import work.archaic.service.compiler.v01.SourceSnapshot;
-import work.archaic.shrink.compiler.JavacCompiler;
+import java.util.ServiceLoader;
 
-CompilerAdapter compiler = new JavacCompiler();
+var providers = ServiceLoader.load(CompilerAdapter.class).stream().toList();
+if (providers.size() != 1) throw new IllegalStateException("Expected one compiler provider");
+CompilerAdapter compiler = providers.getFirst().get();
 var source = new SourceSnapshot(URI.create("memory:/Demo.java"), "Demo.java",
     "class Demo { int count = ; }");
 var result = compiler.parse(source);
 ```
+
+Resolve `work.archaic.shrink.compiler` as a runtime root (for example, with
+`--add-modules work.archaic.shrink.compiler`) so the provider participates in service discovery.
 
 The checked `ParseException` distinguishes an adapter failure from ordinary syntax problems or
 an empty successful result. Results echo the immutable source identity and defensively copy

@@ -41,8 +41,8 @@ you already develop those repositories at another revision.
 
 `java @cmd/run` waits for framed LSP input; it is not an interactive terminal command.
 Use the [Helix guide](docs/helix.md) to launch it from your editor. `java @cmd/test` runs Minau
-with assertions and rejects a zero-test run. Its deliberate adapter-failure test emits an expected
-SEVERE log; the final test summary determines success.
+directly with assertions. Its deliberate adapter-failure test emits an expected Peep failure
+report; the final test summary determines success.
 
 For editor use, add the checkout's `bin/` directory to your `PATH`, or link its launcher into
 a directory already on `PATH`:
@@ -71,8 +71,10 @@ diagnostics. Completion, navigation, formatting, outline and build orchestration
 
 ## Reusable compiler module
 
-`work.archaic.shrink.compiler` provides `JavacCompiler`, implementing the catalog's
-`work.archaic.service.compiler.v01.CompilerAdapter`. Another named module can use it without
-loading the LSP server or JSON libraries. See [architecture and API usage](docs/architecture.md).
+`work.archaic.shrink.compiler` provides the catalog's
+`work.archaic.service.compiler.v01.CompilerAdapter`. Another named module can select it with
+`ServiceLoader` without loading the LSP server or JSON libraries. Shrink uses Peep v02 for
+goal-scoped failure diagnostics; its complete intents are serving the editor session and analyzing
+a document. See [architecture and API usage](docs/architecture.md).
 
 See also [dependency pins and licenses](docs/dependencies.md) and [verification](docs/verification.md).

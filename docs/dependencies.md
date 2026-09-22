@@ -13,11 +13,11 @@ left unchanged and cause an explanatory failure.
 
 | Repository | Commit | Module / purpose |
 |---|---|---|
-| archaic-java/minau | `13808cc18f93005fb88f5510d37bd2785a435578` | `work.archaic.minau`, test runner only |
-| archaic-java/service-catalog | `a1b8d4ab43e92647693f2e92933e1f2df99a1476` | `work.archaic.service.catalog`, compiler v01 contract and test contracts |
+| archaic-java/minau | `7abc609a7092dc6491d9af299499cfe434ad7f23` | `work.archaic.minau`, test runner only |
+| archaic-java/service-catalog | `5265d7bb7549a5325fe39ee26b2ce1f4e4f0aeb3` | `work.archaic.service.catalog`, compiler and logging contracts, plus test v02 |
+| archaic-java/peep | `b97658043f3eead9f62569c16b650432c45aaee5` | `work.archaic.peep`, logging v02 runtime provider |
 
-The catalog pin includes the new compiler contract. Its original baseline was
-`fc74f686ef0449773857527811a86c8c80744f08`. Do not replace the pin with a moving branch name.
+The catalog pin includes the compiler contract, logging v02 and test v02. Do not replace a pin with a moving branch name.
 The contract package is `work.archaic.service.compiler.v01`; its version is separate from the
 repository revision. Shrink's compiler module imports only compiler contract types, not test types.
 
@@ -27,10 +27,12 @@ The committed relative links are:
 |---|---|
 | lib/src/work.archaic.minau | ../../../minau/src/work.archaic.minau |
 | lib/src/work.archaic.service.catalog | ../../../service-catalog/src/work.archaic.service.catalog |
+| lib/src/work.archaic.peep | ../../../peep/src/work.archaic.peep |
 
 Minau's current implementation requires only the catalog. Its stdout summaries run in a separate
-test process; they never share the server's protocol stream. Jules is not a dependency because
-this implementation has no SLF4J consumer. Server logging uses java.util.logging.
+test process; they never share the server's protocol stream. Peep provides Shrink's `Diagnostics`
+and `Log` services and writes failure reports to stderr. Jules is not a dependency because this
+implementation has no SLF4J consumer.
 
 ## Binary modules
 

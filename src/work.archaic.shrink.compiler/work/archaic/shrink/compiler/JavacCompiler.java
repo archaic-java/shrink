@@ -19,7 +19,7 @@ import work.archaic.service.compiler.v01.*;
 /**
  * Syntax analysis using the running JDK's default language level through public javac APIs.
  * Requires JDK 25 or newer. Each invocation owns all compiler resources.
- * Instantiate explicitly; no provider registry is required. Preview features are disabled.
+ * Discovered through {@link java.util.ServiceLoader}; preview features are disabled.
  */
 public final class JavacCompiler implements CompilerAdapter {
   public JavacCompiler() {

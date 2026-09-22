@@ -45,8 +45,9 @@ final class WireClient implements AutoCloseable {
   void initialize(boolean versions) throws Exception {
     raw("{\"jsonrpc\":\"2.0\",\"id\":\"init\",\"method\":\"initialize\",\"params\":{\"capabilities\":{\"textDocument\":{\"publishDiagnostics\":{\"versionSupport\":" + versions + "}}}}}");
     JsonObject result = receive();
-    assert result.getString("id").equals("init") : result;
-    assert result.getJsonObject("result").getJsonObject("capabilities").getString("positionEncoding").equals("utf-16");
+    assert result.getString("id").equals("init") : "Initialize response must retain the request id: " + result;
+    assert result.getJsonObject("result").getJsonObject("capabilities").getString("positionEncoding").equals("utf-16")
+        : "Server must advertise UTF-16 positions";
     raw("{\"jsonrpc\":\"2.0\",\"method\":\"initialized\",\"params\":{}}");
   }
 
@@ -71,15 +72,16 @@ final class WireClient implements AutoCloseable {
 
   JsonObject diagnostics() throws Exception {
     JsonObject message = receive();
-    assert message.getString("method", "").equals("textDocument/publishDiagnostics") : message;
+    assert message.getString("method", "").equals("textDocument/publishDiagnostics")
+        : "Expected a diagnostics notification: " + message;
     return message.getJsonObject("params");
   }
 
   void shutdown() throws Exception {
     raw("{\"jsonrpc\":\"2.0\",\"id\":99,\"method\":\"shutdown\"}");
     JsonObject response = receive();
-    assert response.getInt("id") == 99 : response;
-    assert response.get("result") == JsonValue.NULL : response;
+    assert response.getInt("id") == 99 : "Shutdown response must retain its request id: " + response;
+    assert response.get("result") == JsonValue.NULL : "Shutdown response must return null: " + response;
     raw("{\"jsonrpc\":\"2.0\",\"method\":\"exit\"}");
   }
 
