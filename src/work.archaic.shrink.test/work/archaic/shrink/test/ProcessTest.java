@@ -144,12 +144,17 @@ record AbnormalExitAndBrokenFramingFail() implements TestCase {
     try (var server = new Server()) {
       server.client.raw("{\"jsonrpc\":\"2.0\",\"method\":\"exit\"}");
       server.finish(1);
+      String report = server.errors.toString(java.nio.charset.StandardCharsets.UTF_8);
+      assert report.contains("language-server.serve") : "Abnormal session must fail the serving goal: " + report;
+      assert report.contains("LSP client exited before shutdown") : "Serving-goal report must retain the exit evidence: " + report;
     }
     try (var server = new Server()) {
       server.process.getOutputStream().write("Content-Length: -1\r\n\r\n".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
       server.process.getOutputStream().flush();
       server.finish(1);
-      assert server.errors.size() > 0 : "Broken framing must leave failure evidence on stderr";
+      String report = server.errors.toString(java.nio.charset.StandardCharsets.UTF_8);
+      assert report.contains("language-server.serve") : "Broken framing must fail the serving goal: " + report;
+      assert report.contains("Invalid or incomplete LSP stream") : "Serving-goal report must retain framing evidence: " + report;
     }
     trail.note("Verified abnormal protocol exits and framing failures");
   }

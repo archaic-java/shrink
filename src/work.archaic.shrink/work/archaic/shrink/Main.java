@@ -23,9 +23,14 @@ public final class Main {
       Log log = exactlyOne(Log.class);
       Diagnostics diagnostics = exactlyOne(Diagnostics.class);
       CompilerAdapter compiler = exactlyOne(CompilerAdapter.class);
+      Goal serve = diagnostics.goal("language-server.serve", log);
       Goal analyze = diagnostics.goal("diagnostics.analyze", log);
-      Goal publish = diagnostics.goal("diagnostics.publish", log);
-      status = new Session(System.in, System.out, compiler, analyze, publish, log).run();
+      serve.run(() -> {
+        if (new Session(System.in, System.out, compiler, analyze, diagnostics, log).run() != 0) {
+          throw new IllegalStateException("Language-server session ended abnormally");
+        }
+      });
+      status = 0;
     } catch (Exception failure) {
       failure.printStackTrace(System.err);
     }

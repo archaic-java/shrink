@@ -14,6 +14,7 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import work.archaic.service.compiler.v01.*;
+import work.archaic.service.logging.v02.Diagnostics;
 import work.archaic.service.logging.v02.Goal;
 import work.archaic.service.logging.v02.Log;
 import work.archaic.shrink.protocol.Framing;
@@ -30,7 +31,7 @@ public final class Session {
   private final OutputStream output;
   private final CompilerAdapter compiler;
   private final Goal analyze;
-  private final Goal publish;
+  private final Diagnostics diagnostics;
   private final Log log;
   private final Documents documents = new Documents(TimeUnit.MILLISECONDS.toNanos(150));
   private final ArrayBlockingQueue<Event> events = new ArrayBlockingQueue<>(16);
@@ -39,12 +40,12 @@ public final class Session {
   private boolean busy;
   private Integer exitStatus;
 
-  public Session(InputStream input, OutputStream output, CompilerAdapter compiler, Goal analyze, Goal publish, Log log) {
+  public Session(InputStream input, OutputStream output, CompilerAdapter compiler, Goal analyze, Diagnostics diagnostics, Log log) {
     this.input = input;
     this.output = output;
     this.compiler = compiler;
     this.analyze = analyze;
-    this.publish = publish;
+    this.diagnostics = diagnostics;
     this.log = log;
   }
 
@@ -78,10 +79,13 @@ public final class Session {
         if (event == null) continue;
         switch (event) {
           case Message message -> receive(message.body());
-          case Completed completed -> publish.run(() -> completed(completed));
+          case Completed completed -> completed(completed);
           case End end -> {
-            if (end.failure() != null) log.write("Invalid or incomplete LSP stream: " + end.failure());
-            exitStatus = end.failure() == null && state == State.SHUTDOWN ? 0 : 1;
+            boolean normal = end.failure() == null && state == State.SHUTDOWN;
+            if (!normal) diagnostics.note(end.failure() == null
+                ? "LSP stream ended before shutdown"
+                : "Invalid or incomplete LSP stream: " + end.failure());
+            exitStatus = normal ? 0 : 1;
           }
         }
       }
@@ -142,6 +146,7 @@ public final class Session {
     String method = message.getString("method");
     try {
       if (method.equals("exit") && !request) {
+        if (state != State.SHUTDOWN) diagnostics.note("LSP client exited before shutdown");
         exitStatus = state == State.SHUTDOWN ? 0 : 1;
         return;
       }

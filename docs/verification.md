@@ -31,10 +31,9 @@ The Minau v02 suite contains 19 independently registered cases across five publi
   protocol errors, notifications, publication, clearing, repeated edits, shutdown and abnormal exit.
 - No generated files in the server working directory and no unframed stdout output.
 
-`java @cmd/test` enables assertions and launches Minau. Its small wrapper rejects Minau's otherwise
-successful zero-test outcome. The deliberately failing adapter emits an expected Peep failure
-report to stderr; the corresponding test verifies window/showMessage rather than an empty
-diagnostic success.
+`java @cmd/test` enables assertions and launches Minau directly. The deliberately failing adapter
+emits an expected Peep failure report to stderr; the corresponding test verifies window/showMessage
+rather than an empty diagnostic success.
 
 Both binary JAR descriptors were inspected with `jar --describe-module` and are explicit named
 modules. The dependency setup script was syntax checked with `bash -n`.

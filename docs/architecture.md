@@ -15,11 +15,11 @@ implementation package and requires the catalog only for its provider contract. 
 implementation packages have only narrow qualified exports to its test module.
 
 Shrink uses Peep's logging v02 provider. At composition, it resolves exactly one `Diagnostics`,
-`Log` and compiler adapter. `diagnostics.analyze` is the independent goal for each document
-snapshot; `diagnostics.publish` owns each LSP response on the event loop. The parser worker
-retains the analysis boundary while the event loop owns response delivery, without nesting goals
-on either thread. A failed adapter attempt publishes Peep's failure report, then the separate
-publication goal sends the LSP error notification.
+`Log` and compiler adapter. `language-server.serve` owns the complete editor session, including
+LSP responses on its event-loop thread. `diagnostics.analyze` is the independent goal for each
+document snapshot on the parser worker. A broken stream is noted on the serving goal, which then
+fails when the session ends abnormally; a failed adapter attempt reports separately through its
+analysis goal. These goals never nest on one thread.
 
 ## Compiler contract
 
