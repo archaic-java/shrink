@@ -16,7 +16,6 @@ import java.util.concurrent.TimeUnit;
 import work.archaic.service.compiler.v01.*;
 import work.archaic.service.logging.v02.Diagnostics;
 import work.archaic.service.logging.v02.Goal;
-import work.archaic.service.logging.v02.Log;
 import work.archaic.shrink.protocol.Framing;
 
 /** One session owns all document mutations and all protocol output. */
@@ -32,7 +31,6 @@ public final class Session {
   private final CompilerAdapter compiler;
   private final Goal analyze;
   private final Diagnostics diagnostics;
-  private final Log log;
   private final Documents documents = new Documents(TimeUnit.MILLISECONDS.toNanos(150));
   private final ArrayBlockingQueue<Event> events = new ArrayBlockingQueue<>(16);
   private State state = State.NEW;
@@ -40,13 +38,12 @@ public final class Session {
   private boolean busy;
   private Integer exitStatus;
 
-  public Session(InputStream input, OutputStream output, CompilerAdapter compiler, Goal analyze, Diagnostics diagnostics, Log log) {
+  public Session(InputStream input, OutputStream output, CompilerAdapter compiler, Goal analyze, Diagnostics diagnostics) {
     this.input = input;
     this.output = output;
     this.compiler = compiler;
     this.analyze = analyze;
     this.diagnostics = diagnostics;
-    this.log = log;
   }
 
   public int run() throws IOException, InterruptedException {
@@ -222,7 +219,7 @@ public final class Session {
       }
     } catch (IllegalArgumentException | ClassCastException failure) {
       if (request) error(id, -32602, "Invalid params");
-      else log.write("shrink ignored invalid " + method + ": " + failure.getMessage());
+      else diagnostics.note("Ignored invalid " + method + ": " + failure.getMessage());
     }
   }
 
@@ -234,7 +231,7 @@ public final class Session {
           .add("message", "shrink could not analyze " + completed.work().source().uri() + "; see server logs.").build());
       return;
     }
-    for (String notice : completed.result().notices()) log.write("shrink compiler notice: " + notice);
+    for (String notice : completed.result().notices()) diagnostics.note("Compiler notice: " + notice);
     var diagnostics = Json.createArrayBuilder();
     for (Diagnostic diagnostic : completed.result().diagnostics()) {
       var value = Json.createObjectBuilder()

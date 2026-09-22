@@ -22,12 +22,12 @@ public record SessionTest() implements TestSuite {
 final class SessionGoals {
   private SessionGoals() {}
 
-  record Instrumentation(Goal analyze, Diagnostics diagnostics, Log log) {}
+  record Instrumentation(Goal analyze, Diagnostics diagnostics) {}
 
   static Instrumentation instrumentation() {
     var diagnostics = exactlyOne(Diagnostics.class);
     Log log = exactlyOne(Log.class);
-    return new Instrumentation(diagnostics.goal("diagnostics.analyze", log), diagnostics, log);
+    return new Instrumentation(diagnostics.goal("diagnostics.analyze", log), diagnostics);
   }
 
   private static <T> T exactlyOne(Class<T> service) {
@@ -49,7 +49,7 @@ final class RunningSession implements AutoCloseable {
   RunningSession(CompilerAdapter compiler) throws IOException {
     var instrumentation = SessionGoals.instrumentation();
     server = Thread.ofVirtual().start(() -> {
-      try { status.complete(new Session(serverInput, serverOutput, compiler, instrumentation.analyze(), instrumentation.diagnostics(), instrumentation.log()).run()); }
+      try { status.complete(new Session(serverInput, serverOutput, compiler, instrumentation.analyze(), instrumentation.diagnostics()).run()); }
       catch (Exception failure) { status.completeExceptionally(failure); }
     });
   }
