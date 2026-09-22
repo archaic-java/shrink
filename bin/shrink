@@ -28,5 +28,5 @@ done
 shrink_root=$(CDPATH= cd -P "$(dirname "$shrink_launcher")/.." && pwd)
 
 exec java --module-path "$shrink_root/out:$shrink_root/lib/bin" \
-  --add-modules org.eclipse.parsson \
+  --add-modules org.eclipse.parsson,work.archaic.peep,work.archaic.shrink.compiler \
   --module work.archaic.shrink/work.archaic.shrink.Main "$@"

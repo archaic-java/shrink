@@ -13,23 +13,25 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import work.archaic.service.compiler.v01.*;
+import work.archaic.service.logging.v02.Goal;
+import work.archaic.service.logging.v02.Log;
 import work.archaic.shrink.protocol.Framing;
 
 /** One session owns all document mutations and all protocol output. */
 public final class Session {
-  private static final Logger LOG = Logger.getLogger(Session.class.getName());
   private enum State { NEW, INITIALIZING, ACTIVE, SHUTDOWN }
   private sealed interface Event {}
   private record Message(byte[] body) implements Event {}
   private record End(IOException failure) implements Event {}
-  private record Completed(Documents.Work work, ParseResult result, Exception failure) implements Event {}
+  private record Completed(Documents.Work work, ParseResult result, Throwable failure) implements Event {}
 
   private final InputStream input;
   private final OutputStream output;
   private final CompilerAdapter compiler;
+  private final Goal analyze;
+  private final Goal publish;
+  private final Log log;
   private final Documents documents = new Documents(TimeUnit.MILLISECONDS.toNanos(150));
   private final ArrayBlockingQueue<Event> events = new ArrayBlockingQueue<>(16);
   private State state = State.NEW;
@@ -37,10 +39,13 @@ public final class Session {
   private boolean busy;
   private Integer exitStatus;
 
-  public Session(InputStream input, OutputStream output, CompilerAdapter compiler) {
+  public Session(InputStream input, OutputStream output, CompilerAdapter compiler, Goal analyze, Goal publish, Log log) {
     this.input = input;
     this.output = output;
     this.compiler = compiler;
+    this.analyze = analyze;
+    this.publish = publish;
+    this.log = log;
   }
 
   public int run() throws IOException, InterruptedException {
@@ -63,15 +68,8 @@ public final class Session {
           if (next != null) {
             busy = true;
             worker.execute(() -> {
-              try {
-                ParseResult result = compiler.parse(next.source());
-                if (!result.source().equals(next.source())) {
-                  throw new IllegalStateException("Compiler returned a result for a different source");
-                }
-                enqueue(new Completed(next, result, null));
-              } catch (Exception failure) {
-                enqueue(new Completed(next, null, failure));
-              }
+              try { analyze.run(() -> analyze(next)); }
+              catch (Throwable ignored) { /* The completed event already communicates the failure. */ }
             });
           }
         }
@@ -80,9 +78,9 @@ public final class Session {
         if (event == null) continue;
         switch (event) {
           case Message message -> receive(message.body());
-          case Completed completed -> completed(completed);
+          case Completed completed -> publish.run(() -> completed(completed));
           case End end -> {
-            if (end.failure() != null) LOG.log(Level.WARNING, "Invalid or incomplete LSP stream", end.failure());
+            if (end.failure() != null) log.write("Invalid or incomplete LSP stream: " + end.failure());
             exitStatus = end.failure() == null && state == State.SHUTDOWN ? 0 : 1;
           }
         }
@@ -92,6 +90,19 @@ public final class Session {
       documents.clear();
       reader.interrupt();
       worker.shutdownNow(); // Never await an uncooperative javac task during shutdown.
+    }
+  }
+
+  private void analyze(Documents.Work work) throws Throwable {
+    try {
+      ParseResult result = compiler.parse(work.source());
+      if (!result.source().equals(work.source())) {
+        throw new IllegalStateException("Compiler returned a result for a different source");
+      }
+      enqueue(new Completed(work, result, null));
+    } catch (Throwable failure) {
+      enqueue(new Completed(work, null, failure));
+      throw failure;
     }
   }
 
@@ -206,7 +217,7 @@ public final class Session {
       }
     } catch (IllegalArgumentException | ClassCastException failure) {
       if (request) error(id, -32602, "Invalid params");
-      else LOG.warning("Ignored invalid " + method + ": " + failure.getMessage());
+      else log.write("shrink ignored invalid " + method + ": " + failure.getMessage());
     }
   }
 
@@ -214,12 +225,11 @@ public final class Session {
     busy = false;
     if (state != State.ACTIVE || !documents.current(completed.work())) return;
     if (completed.failure() != null) {
-      LOG.log(Level.SEVERE, "Compiler adapter failed", completed.failure());
       notify("window/showMessage", Json.createObjectBuilder().add("type", 1)
           .add("message", "shrink could not analyze " + completed.work().source().uri() + "; see server logs.").build());
       return;
     }
-    for (String notice : completed.result().notices()) LOG.warning(notice);
+    for (String notice : completed.result().notices()) log.write("shrink compiler notice: " + notice);
     var diagnostics = Json.createArrayBuilder();
     for (Diagnostic diagnostic : completed.result().diagnostics()) {
       var value = Json.createObjectBuilder()

@@ -1,3 +1,3 @@
 --module-path out:lib/bin
---add-modules org.eclipse.parsson
+--add-modules org.eclipse.parsson,work.archaic.peep,work.archaic.shrink.compiler
 -m work.archaic.shrink/work.archaic.shrink.Main

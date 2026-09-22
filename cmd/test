@@ -1,4 +1,4 @@
 -ea
 --module-path out:lib/bin
---add-modules work.archaic.shrink.test,org.eclipse.parsson
+--add-modules work.archaic.shrink.test,work.archaic.shrink.compiler,work.archaic.peep,org.eclipse.parsson
 -m work.archaic.shrink.test/work.archaic.shrink.test.TestMain

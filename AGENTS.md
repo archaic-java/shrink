@@ -10,8 +10,10 @@
   generated protocol bindings, annotation processing or reflective application dispatch.
 - Source links under `lib/src/` point to sibling checkouts pinned in `dependencies.lock`.
   Deliberately pinned modular JSON JARs live in `lib/bin/`; verify `lib/checksums.sha256`.
-- `work.archaic.shrink.compiler` implements the catalog's versioned compiler contract and must
-  remain independently usable without the server or JSON. Select its implementation explicitly.
-- stdout is exclusively LSP framing. All logs and compiler auxiliary output go to stderr.
-- Minau tests use `-ea`; the test launcher must reject a zero-test run.
+- `work.archaic.shrink.compiler` provides the catalog's versioned compiler contract and must
+  remain independently usable without the server or JSON. Select exactly one implementation with ServiceLoader.
+- stdout is exclusively LSP framing. Peep v02 writes failures and compiler auxiliary output to stderr.
+- Name each complete user-facing intent as a Goal; keep its response and failures inside `goal.run(...)`.
+- Minau v02 tests use `-ea`, public suite records, package-private cases and inline `assert condition : "reason"` checks.
+  Do not create assertion helper methods. The test launcher must reject a zero-test run.
 - Keep generated `out/` untracked. Document protocol or editor-facing behavior in `docs/`.

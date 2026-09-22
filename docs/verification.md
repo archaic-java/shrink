@@ -16,7 +16,7 @@ javac @cmd/compile
 java @cmd/test
 ```
 
-The Minau suite contains 19 tests across five suites. Coverage includes:
+The Minau v02 suite contains 19 independently registered cases across five public suite records. Coverage includes:
 
 - Java syntax errors, corrections, empty source, unresolved dependencies and module-info.java.
 - LF, CRLF, CR, tabs, supplementary Unicode, Java Unicode escapes and EOF coordinates.
@@ -32,8 +32,9 @@ The Minau suite contains 19 tests across five suites. Coverage includes:
 - No generated files in the server working directory and no unframed stdout output.
 
 `java @cmd/test` enables assertions and launches Minau. Its small wrapper rejects Minau's otherwise
-successful zero-test outcome. The deliberately failing adapter logs an expected SEVERE message;
-the corresponding test verifies window/showMessage rather than an empty diagnostic success.
+successful zero-test outcome. The deliberately failing adapter emits an expected Peep failure
+report to stderr; the corresponding test verifies window/showMessage rather than an empty
+diagnostic success.
 
 Both binary JAR descriptors were inspected with `jar --describe-module` and are explicit named
 modules. The dependency setup script was syntax checked with `bash -n`.

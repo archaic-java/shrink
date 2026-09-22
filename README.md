@@ -71,8 +71,10 @@ diagnostics. Completion, navigation, formatting, outline and build orchestration
 
 ## Reusable compiler module
 
-`work.archaic.shrink.compiler` provides `JavacCompiler`, implementing the catalog's
-`work.archaic.service.compiler.v01.CompilerAdapter`. Another named module can use it without
-loading the LSP server or JSON libraries. See [architecture and API usage](docs/architecture.md).
+`work.archaic.shrink.compiler` provides the catalog's
+`work.archaic.service.compiler.v01.CompilerAdapter`. Another named module can select it with
+`ServiceLoader` without loading the LSP server or JSON libraries. Shrink uses Peep v02 for
+goal-scoped failure diagnostics; its complete intents are document analysis and diagnostic
+publication. See [architecture and API usage](docs/architecture.md).
 
 See also [dependency pins and licenses](docs/dependencies.md) and [verification](docs/verification.md).

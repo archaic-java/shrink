@@ -1,5 +1,5 @@
 --release 25
---module work.archaic.service.catalog,work.archaic.minau,work.archaic.shrink.compiler,work.archaic.shrink,work.archaic.shrink.test
+--module work.archaic.service.catalog,work.archaic.minau,work.archaic.peep,work.archaic.shrink.compiler,work.archaic.shrink,work.archaic.shrink.test
 --module-source-path src:lib/src
 --module-path lib/bin
 -d out
