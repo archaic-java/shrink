@@ -16,7 +16,7 @@ javac @cmd/compile
 java @cmd/test
 ```
 
-The Minau v02 suite contains 19 independently registered cases across five public suite records. Coverage includes:
+The Minau v02 suite contains 22 independently registered cases across five public suite records. Coverage includes:
 
 - Java syntax errors, corrections, empty source, unresolved dependencies and module-info.java.
 - LF, CRLF, CR, tabs, supplementary Unicode, Java Unicode escapes and EOF coordinates.
@@ -31,9 +31,12 @@ The Minau v02 suite contains 19 independently registered cases across five publi
   protocol errors, notifications, publication, clearing, repeated edits, shutdown and abnormal exit.
 - No generated files in the server working directory and no unframed stdout output.
 
-`java @cmd/test` enables assertions and launches Minau directly. The deliberately failing adapter
-emits an expected Peep failure report to stderr; the corresponding test verifies window/showMessage
-rather than an empty diagnostic success.
+`java @cmd/test` enables assertions and launches Minau directly. Adapter failure tests capture
+Culpa reports, verify original throwable identity and source evidence, then parse another snapshot
+to verify recovery. They also cover deep explicit failure, fresh worker contexts, lazy debug output,
+compiler notices, and exactly one report for abnormal sessions. A debug-enabled subprocess confirms
+logs stay on stderr while stdout remains valid LSP framing. The compiler module's standalone
+consumer test continues to resolve neither the LSP server nor Culpa.
 
 Both binary JAR descriptors were inspected with `jar --describe-module` and are explicit named
 modules. The dependency setup script was syntax checked with `bash -n`.

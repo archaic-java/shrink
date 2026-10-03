@@ -14,12 +14,14 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import work.archaic.service.compiler.v01.*;
-import work.archaic.service.logging.v02.Diagnostics;
-import work.archaic.service.logging.v02.Goal;
+import work.archaic.service.logging.v03.Configuration;
+import work.archaic.service.logging.v03.Context;
+import work.archaic.service.logging.v03.Log;
+import work.archaic.service.logging.v03.Logging;
 import work.archaic.shrink.protocol.Framing;
 
 /** One session owns all document mutations and all protocol output. */
-public final class Session {
+public final class Session implements Logging {
   private enum State { NEW, INITIALIZING, ACTIVE, SHUTDOWN }
   private sealed interface Event {}
   private record Message(byte[] body) implements Event {}
@@ -29,8 +31,9 @@ public final class Session {
   private final InputStream input;
   private final OutputStream output;
   private final CompilerAdapter compiler;
-  private final Goal analyze;
-  private final Diagnostics diagnostics;
+  private final Log logging;
+  private final Configuration configuration;
+  private final Context context;
   private final Documents documents = new Documents(TimeUnit.MILLISECONDS.toNanos(150));
   private final ArrayBlockingQueue<Event> events = new ArrayBlockingQueue<>(16);
   private State state = State.NEW;
@@ -38,15 +41,25 @@ public final class Session {
   private boolean busy;
   private Integer exitStatus;
 
-  public Session(InputStream input, OutputStream output, CompilerAdapter compiler, Goal analyze, Diagnostics diagnostics) {
+  public Session(InputStream input, OutputStream output, CompilerAdapter compiler, Log logging, Configuration configuration) {
     this.input = input;
     this.output = output;
     this.compiler = compiler;
-    this.analyze = analyze;
-    this.diagnostics = diagnostics;
+    this.logging = java.util.Objects.requireNonNull(logging);
+    this.configuration = java.util.Objects.requireNonNull(configuration);
+    this.context = logging.context(configuration);
   }
 
-  public int run() throws IOException, InterruptedException {
+  public int run() throws Exception {
+    context.run(() -> {
+      logOnFailure("Serving editor session");
+      serve();
+      if (exitStatus != 0) context.fail("Language-server session ended abnormally");
+    });
+    return exitStatus;
+  }
+
+  private void serve() throws IOException, InterruptedException {
     var worker = Executors.newSingleThreadExecutor(Thread.ofPlatform().daemon().name("shrink-parser").factory());
     Thread reader = Thread.ofVirtual().name("shrink-reader").start(() -> {
       try {
@@ -65,10 +78,7 @@ public final class Session {
           Documents.Work next = documents.takeReady(System.nanoTime());
           if (next != null) {
             busy = true;
-            worker.execute(() -> {
-              try { analyze.run(() -> analyze(next)); }
-              catch (Throwable ignored) { /* The completed event already communicates the failure. */ }
-            });
+            worker.execute(() -> analyze(next));
           }
         }
         long wait = !busy && state == State.ACTIVE ? documents.waitNanos(System.nanoTime()) : Long.MAX_VALUE;
@@ -79,14 +89,13 @@ public final class Session {
           case Completed completed -> completed(completed);
           case End end -> {
             boolean normal = end.failure() == null && state == State.SHUTDOWN;
-            if (!normal) diagnostics.note(end.failure() == null
+            if (!normal) logOnFailure(end.failure() == null
                 ? "LSP stream ended before shutdown"
                 : "Invalid or incomplete LSP stream: " + end.failure());
             exitStatus = normal ? 0 : 1;
           }
         }
       }
-      return exitStatus;
     } finally {
       documents.clear();
       reader.interrupt();
@@ -94,16 +103,14 @@ public final class Session {
     }
   }
 
-  private void analyze(Documents.Work work) throws Throwable {
+  private void analyze(Documents.Work work) {
     try {
-      ParseResult result = compiler.parse(work.source());
-      if (!result.source().equals(work.source())) {
-        throw new IllegalStateException("Compiler returned a result for a different source");
-      }
+      // Child tasks establish independent contexts; the session context stays on its event loop.
+      ParseResult result = new Analysis(compiler, work).run(logging.context(configuration));
       enqueue(new Completed(work, result, null));
     } catch (Throwable failure) {
+      // Completion runs after the analysis context has published and released its evidence.
       enqueue(new Completed(work, null, failure));
-      throw failure;
     }
   }
 
@@ -141,9 +148,10 @@ public final class Session {
       return;
     }
     String method = message.getString("method");
+    logOnFailure("Received " + method + " in " + state);
     try {
       if (method.equals("exit") && !request) {
-        if (state != State.SHUTDOWN) diagnostics.note("LSP client exited before shutdown");
+        if (state != State.SHUTDOWN) logOnFailure("LSP client exited before shutdown");
         exitStatus = state == State.SHUTDOWN ? 0 : 1;
         return;
       }
@@ -219,7 +227,7 @@ public final class Session {
       }
     } catch (IllegalArgumentException | ClassCastException failure) {
       if (request) error(id, -32602, "Invalid params");
-      else diagnostics.note("Ignored invalid " + method + ": " + failure.getMessage());
+      else logOnFailure("Ignored invalid " + method + ": " + failure.getMessage());
     }
   }
 
@@ -231,7 +239,7 @@ public final class Session {
           .add("message", "shrink could not analyze " + completed.work().source().uri() + "; see server logs.").build());
       return;
     }
-    for (String notice : completed.result().notices()) diagnostics.note("Compiler notice: " + notice);
+    for (String notice : completed.result().notices()) logImmediately("Compiler notice: " + notice);
     var diagnostics = Json.createArrayBuilder();
     for (Diagnostic diagnostic : completed.result().diagnostics()) {
       var value = Json.createObjectBuilder()

@@ -24,7 +24,7 @@ with every release or guaranteeing release-day support.
 
 ## Build and run
 
-Clone shrink into a parent directory that can also hold its pinned `minau` and `service-catalog`
+Clone shrink into a parent directory that can also hold its pinned `minau`, `culpa` and `service-catalog`
 sibling checkouts. Use JDK 25 for the verified build/test baseline, then run from the shrink directory:
 
 ```sh
@@ -41,8 +41,8 @@ you already develop those repositories at another revision.
 
 `java @cmd/run` waits for framed LSP input; it is not an interactive terminal command.
 Use the [Helix guide](docs/helix.md) to launch it from your editor. `java @cmd/test` runs Minau
-directly with assertions. Its deliberate adapter-failure test emits an expected Peep failure
-report; the final test summary determines success.
+directly with assertions. Adapter-failure tests capture Culpa reports and verify that the
+session remains usable; the final test summary determines success.
 
 For editor use, add the checkout's `bin/` directory to your `PATH`, or link its launcher into
 a directory already on `PATH`:
@@ -73,8 +73,9 @@ diagnostics. Completion, navigation, formatting, outline and build orchestration
 
 `work.archaic.shrink.compiler` provides the catalog's
 `work.archaic.service.compiler.v01.CompilerAdapter`. Another named module can select it with
-`ServiceLoader` without loading the LSP server or JSON libraries. Shrink uses Peep v02 for
-goal-scoped failure diagnostics; its complete intents are serving the editor session and analyzing
-a document. See [architecture and API usage](docs/architecture.md).
+`ServiceLoader` without loading the LSP server or JSON libraries. Shrink uses Culpa logging v03 with an independent context for the editor session
+and each document analysis. Contexts run on the existing event loop or parser worker;
+logging creates no extra thread. Failure evidence and compiler notices go to stderr.
+Debug messages use lazy suppliers; enable them with `JAVA_TOOL_OPTIONS=-Dshrink.debug=true`. See [architecture and API usage](docs/architecture.md).
 
 See also [dependency pins and licenses](docs/dependencies.md) and [verification](docs/verification.md).

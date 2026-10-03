@@ -1,4 +1,4 @@
 # Source repository, immutable commit, sibling checkout directory.
-archaic-java/minau 7abc609a7092dc6491d9af299499cfe434ad7f23 minau
-archaic-java/service-catalog 5265d7bb7549a5325fe39ee26b2ce1f4e4f0aeb3 service-catalog
-archaic-java/peep b97658043f3eead9f62569c16b650432c45aaee5 peep
+archaic-java/minau 93bb952390b412fbaa38b2805bcf954fb6b5bd82 minau
+archaic-java/service-catalog 01b46cabadd358d52d6e437045a77f1a0f304c04 service-catalog
+archaic-java/culpa 29dd85509112da847b65ab41de38a833324f59a9 culpa

@@ -12,8 +12,9 @@
   Deliberately pinned modular JSON JARs live in `lib/bin/`; verify `lib/checksums.sha256`.
 - `work.archaic.shrink.compiler` provides the catalog's versioned compiler contract and must
   remain independently usable without the server or JSON. Select exactly one implementation with ServiceLoader.
-- stdout is exclusively LSP framing. Peep v02 writes failures and compiler auxiliary output to stderr.
-- Name each complete user-facing intent as a Goal; keep its response and failures inside `goal.run(...)`.
+- stdout is exclusively LSP framing. Culpa v03 contexts write failures and compiler auxiliary output to stderr.
+- Use an independent configured context for the session and each parser attempt, on their executing threads.
+  Operational objects implement Logging; debug messages use suppliers. Keep the compiler independently usable.
 - Minau v02 tests use `-ea`, public suite records, package-private cases and inline `assert condition : "reason"` checks.
   Do not create assertion helper methods. Launch Minau directly from `cmd/test`.
 - Keep generated `out/` untracked. Document protocol or editor-facing behavior in `docs/`.
