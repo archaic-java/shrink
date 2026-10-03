@@ -14,6 +14,7 @@ public record ProcessTest() implements TestSuite {
     cases.add(new ProtocolErrorsDoNotBreakTheSession());
     cases.add(new CloseReopenAndRepeatedEditsWorkOverStdio());
     cases.add(new AbnormalExitAndBrokenFramingFail());
+    cases.add(new DebugOutputStaysOnStderr());
   }
 }
 
@@ -24,12 +25,15 @@ final class Server implements AutoCloseable {
   final ByteArrayOutputStream errors = new ByteArrayOutputStream();
   final Thread errorReader;
 
-  Server() throws IOException {
+  Server(String... properties) throws IOException {
     String modules = Path.of("out").toAbsolutePath() + ":" + Path.of("lib/bin").toAbsolutePath();
-    process = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
-        "--module-path", modules, "--add-modules", "org.eclipse.parsson,work.archaic.peep,work.archaic.shrink.compiler",
-        "-m", "work.archaic.shrink/work.archaic.shrink.Main")
-        .directory(directory.toFile()).start();
+    var command = new java.util.ArrayList<String>();
+    command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
+    command.addAll(java.util.List.of(properties));
+    command.addAll(java.util.List.of("--module-path", modules, "--add-modules",
+        "org.eclipse.parsson,work.archaic.culpa,work.archaic.shrink.compiler",
+        "-m", "work.archaic.shrink/work.archaic.shrink.Main"));
+    process = new ProcessBuilder(command).directory(directory.toFile()).start();
     errorReader = Thread.ofVirtual().start(() -> {
       try { process.getErrorStream().transferTo(errors); } catch (IOException ignored) {}
     });
@@ -145,17 +149,38 @@ record AbnormalExitAndBrokenFramingFail() implements TestCase {
       server.client.raw("{\"jsonrpc\":\"2.0\",\"method\":\"exit\"}");
       server.finish(1);
       String report = server.errors.toString(java.nio.charset.StandardCharsets.UTF_8);
-      assert report.contains("language-server.serve") : "Abnormal session must fail the serving goal: " + report;
-      assert report.contains("LSP client exited before shutdown") : "Serving-goal report must retain the exit evidence: " + report;
+      assert report.contains("Serving editor session") : "Abnormal session must retain session evidence: " + report;
+      assert report.split("--- failed logging context ---", -1).length == 2 : "Abnormal session must publish one failure report";
+      assert report.contains("LSP client exited before shutdown") : "Session report must retain the exit evidence: " + report;
     }
     try (var server = new Server()) {
       server.process.getOutputStream().write("Content-Length: -1\r\n\r\n".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
       server.process.getOutputStream().flush();
       server.finish(1);
       String report = server.errors.toString(java.nio.charset.StandardCharsets.UTF_8);
-      assert report.contains("language-server.serve") : "Broken framing must fail the serving goal: " + report;
-      assert report.contains("Invalid or incomplete LSP stream") : "Serving-goal report must retain framing evidence: " + report;
+      assert report.contains("Serving editor session") : "Broken framing must fail the session context: " + report;
+      assert report.split("--- failed logging context ---", -1).length == 2 : "Broken framing must publish one failure report";
+      assert report.contains("Invalid or incomplete LSP stream") : "Session report must retain framing evidence: " + report;
     }
     trail.note("Verified abnormal protocol exits and framing failures");
+  }
+}
+
+record DebugOutputStaysOnStderr() implements TestCase {
+  @Override public void run(TestTrail trail) throws Exception {
+    try (var server = new Server("-Dshrink.debug=true")) {
+      server.client.initialize(true);
+      server.client.open(URI.create("file:///Debug.java"), 1, "class Debug { int n = ; }");
+      assert !server.client.diagnostics().getJsonArray("diagnostics").isEmpty()
+          : "Debug logging must leave compiler diagnostics and stdout framing intact";
+      server.client.shutdown();
+      server.finish(0);
+      String logs = server.errors.toString(java.nio.charset.StandardCharsets.UTF_8);
+      assert logs.contains(".Analysis: Snapshot Debug.java") && logs.contains(".Analysis: Parser returned")
+          : "Enabled debug messages must use stderr";
+      assert !logs.contains("failed logging context") && !logs.contains("Serving editor session")
+          : "Syntax errors are results, not failed contexts; successful session evidence must be discarded";
+      trail.note(logs);
+    }
   }
 }

@@ -14,12 +14,31 @@ module is an explicit runtime root in the command files and launcher. The compil
 implementation package and requires the catalog only for its provider contract. The server's
 implementation packages have only narrow qualified exports to its test module.
 
-Shrink uses Peep's logging v02 provider. At composition, it resolves exactly one `Diagnostics`,
-`Log` and compiler adapter. `language-server.serve` owns the complete editor session, including
-LSP responses on its event-loop thread. `diagnostics.analyze` is the independent goal for each
-document snapshot on the parser worker. A broken stream is noted on the serving goal, which then
-fails when the session ends abnormally; a failed adapter attempt reports separately through its
-analysis goal. These goals never nest on one thread.
+Shrink resolves exactly one Culpa logging v03 `Log` factory and compiler adapter at composition.
+It captures a `Configuration` with debug disabled by default, UTC timestamps, 256 retained entries,
+2048 UTF-16 units per field, and explicit stderr sinks. Enable debug with `-Dshrink.debug=true`.
+No logger is installed globally. The sink serializes complete reports across both execution threads.
+
+`Session` implements `Logging` and owns a single-use context for the complete editor session on
+its event-loop thread, including protocol responses. Abnormal return values explicitly mark that
+context failed; escaping exceptions fail it automatically. Completion publishes retained evidence
+once. Normal shutdown discards session evidence.
+
+Each document snapshot creates an `Analysis` object implementing `Logging` and a fresh independent
+context on the existing parser worker. Its evidence identifies the URI, version and generation;
+debug suppliers compute snapshot/result summaries only when enabled. Context completion precedes
+queueing the result or failure. An adapter failure publishes its original throwable and evidence
+once, then the event loop decides whether to notify the editor based on the current document.
+Recovering from that failure leaves the session context successful. Syntax diagnostics are ordinary
+parse results and do not mark a logging context failed.
+
+Contexts are thread-confined: the reader never uses the session context, and the parser never
+inherits or shares it. Only immutable configuration and the stateless provider factory are shared.
+The event queue carries results and failures, not logging contexts. These threads remain necessary
+for responsive transport, debounce scheduling and bounded shutdown; logging adds no thread or
+executor. The reusable compiler adapter retains no logging dependency or context requirement.
+Current compiler notices use `logImmediately` on the event loop; diagnostics stay on the LSP wire.
+
 
 ## Compiler contract
 
@@ -88,7 +107,7 @@ parse-error response and permits the next frame. Logs and compiler auxiliary out
 The server advertises only full text synchronization and UTF-16 coordinates. It supports initialize,
 initialized, didOpen, didChange, didClose, shutdown and exit. Diagnostics are pushed, not pulled.
 String and signed 32-bit integer request IDs are preserved. Unknown requests receive MethodNotFound;
-unknown notifications are ignored. Invalid notification parameters are logged without a response.
+unknown notifications are ignored. Invalid notification parameters are retained as session failure evidence without a response.
 Invalid JSON-RPC envelopes receive InvalidRequest. Requests before initialization receive
 ServerNotInitialized. After shutdown, only exit is accepted; other requests receive InvalidRequest.
 
