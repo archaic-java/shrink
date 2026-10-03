@@ -17,7 +17,9 @@ implementation packages have only narrow qualified exports to its test module.
 Shrink resolves exactly one Culpa logging v03 `Log` factory and compiler adapter at composition.
 It captures a `Configuration` with debug disabled by default, UTC timestamps, 256 retained entries,
 2048 UTF-16 units per field, and explicit stderr sinks. Enable debug with `-Dshrink.debug=true`.
-No logger is installed globally. The sink serializes complete reports across both execution threads.
+No logger is installed globally. The catalog
+`Configuration.text(debug, System.err)` convenience uses the reusable `TextOutput` renderer,
+which serializes complete reports across both execution threads.
 
 `Session` implements `Logging` and owns a single-use context for the complete editor session on
 its event-loop thread, including protocol responses. Abnormal return values explicitly mark that
@@ -25,7 +27,8 @@ context failed; escaping exceptions fail it automatically. Completion publishes 
 once. Normal shutdown discards session evidence.
 
 Each document snapshot creates an `Analysis` object implementing `Logging` and a fresh independent
-context on the existing parser worker. Its evidence identifies the URI, version and generation;
+context on the existing parser worker. `context.call` returns its ParseResult directly, without
+a mutable result field or wrapper exception. Its evidence identifies the URI, version and generation;
 debug suppliers compute snapshot/result summaries only when enabled. Context completion precedes
 queueing the result or failure. An adapter failure publishes its original throwable and evidence
 once, then the event loop decides whether to notify the editor based on the current document.

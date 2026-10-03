@@ -11,7 +11,6 @@ import work.archaic.service.logging.v03.Logging;
 final class Analysis implements Logging {
   private final CompilerAdapter compiler;
   private final Documents.Work work;
-  private ParseResult result;
 
   Analysis(CompilerAdapter compiler, Documents.Work work) {
     this.compiler = compiler;
@@ -19,14 +18,14 @@ final class Analysis implements Logging {
   }
 
   ParseResult run(Context context) throws ParseException {
-    context.run(() -> {
+    return context.call(() -> {
       SourceSnapshot source = work.source();
       logOnFailure("Analyzing " + source.uri() + " version " + work.version() + " generation " + work.generation());
       logOnDebug(() -> "Snapshot " + source.fileName() + ": " + source.text().length() + " UTF-16 units");
-      result = compiler.parse(source);
+      ParseResult result = compiler.parse(source);
       if (!result.source().equals(source)) throw new IllegalStateException("Compiler returned a result for a different source");
       logOnDebug(() -> "Parser returned " + result.diagnostics().size() + " diagnostics and " + result.notices().size() + " notices");
+      return result;
     });
-    return result;
   }
 }
