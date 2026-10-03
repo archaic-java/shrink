@@ -176,7 +176,7 @@ record DebugOutputStaysOnStderr() implements TestCase {
       server.client.shutdown();
       server.finish(0);
       String logs = server.errors.toString(java.nio.charset.StandardCharsets.UTF_8);
-      assert logs.contains(".Analysis: Snapshot Debug.java") && logs.contains(".Analysis: Parser returned")
+      assert logs.contains(".Analysis Snapshot Debug.java") && logs.contains(".Analysis Parser returned")
           : "Enabled debug messages must use stderr";
       assert !logs.contains("failed logging context") && !logs.contains("Serving editor session")
           : "Syntax errors are results, not failed contexts; successful session evidence must be discarded";

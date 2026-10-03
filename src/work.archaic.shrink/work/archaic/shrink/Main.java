@@ -17,7 +17,6 @@ public final class Main {
 
   private static int run(String[] args) {
     Session session;
-    var output = new ServerLog(System.err);
     try {
       if (args.length != 0) throw new IllegalArgumentException("Usage: shrink (stdio; no arguments)");
       if (ServiceLoader.load(JsonProvider.class).stream().count() != 1) {
@@ -26,10 +25,10 @@ public final class Main {
       JsonProvider.provider(); // Resolve before accepting any protocol input.
       Log logging = exactlyOne(Log.class);
       CompilerAdapter compiler = exactlyOne(CompilerAdapter.class);
-      var configuration = new Configuration(Boolean.getBoolean("shrink.debug"), output::entry, output::failure);
+      var configuration = Configuration.text(Boolean.getBoolean("shrink.debug"), System.err);
       session = new Session(System.in, System.out, compiler, logging, configuration);
     } catch (Exception | java.util.ServiceConfigurationError failure) {
-      output.problem(failure); // Composition failed before a context existed.
+      System.err.println("shrink cannot continue: " + failure); // No context exists yet.
       return 1;
     }
     try {

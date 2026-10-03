@@ -14,8 +14,8 @@ left unchanged and cause an explanatory failure.
 | Repository | Commit | Module / purpose |
 |---|---|---|
 | archaic-java/minau | `93bb952390b412fbaa38b2805bcf954fb6b5bd82` | `work.archaic.minau`, test runner only |
-| archaic-java/service-catalog | `01b46cabadd358d52d6e437045a77f1a0f304c04` | `work.archaic.service.catalog`, compiler and logging contracts, plus test v02 |
-| archaic-java/culpa | `29dd85509112da847b65ab41de38a833324f59a9` | `work.archaic.culpa`, logging v03 runtime provider |
+| archaic-java/service-catalog | `69f61743dc0b8a67f18b06231e3139ce0054eaf2` | `work.archaic.service.catalog`, compiler and logging contracts, plus test v02 |
+| archaic-java/culpa | `e3db79e01fb4891d22877102b2824b4943ebec0b` | `work.archaic.culpa`, logging v03 runtime provider |
 
 The catalog pin includes the compiler contract, logging v03 and test v02. Do not replace a pin with a moving branch name.
 The contract package is `work.archaic.service.compiler.v01`; its version is separate from the
