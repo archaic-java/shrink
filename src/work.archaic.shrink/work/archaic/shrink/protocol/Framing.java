@@ -21,14 +21,12 @@ public final class Framing {
     byte[] delimiter = {'\r', '\n', '\r', '\n'};
     while (matched < delimiter.length) {
       int b = input.read();
-      if (b < 0) {
-        if (header.size() == 0) return null;
-        throw new EOFException("Truncated LSP header");
-      }
+      if (b < 0 && header.size() == 0) return null;
+      if (b < 0) throw new EOFException("Truncated LSP header");
       if (b > 127 || b == 0) throw new IOException("Non-ASCII LSP header");
       header.write(b);
       if (header.size() > MAX_HEADER) throw new IOException("LSP header exceeds 8 KiB");
-      matched = b == delimiter[matched] ? matched + 1 : (b == '\r' ? 1 : 0);
+      matched = matchDelimiter(b, matched, delimiter);
     }
     String text = header.toString(StandardCharsets.US_ASCII);
     Integer length = null;
@@ -40,23 +38,40 @@ public final class Framing {
       String name = line.substring(0, colon).strip();
       String value = line.substring(colon + 1).strip();
       if (name.equalsIgnoreCase("Content-Length")) {
-        if (length != null || !value.matches("[0-9]{1,9}")) {
-          throw new IOException("Invalid or duplicate Content-Length");
-        }
-        length = Integer.parseInt(value);
-        if (length > MAX_BODY) throw new IOException("LSP body exceeds 8 MiB");
+        length = contentLength(value, length);
+        continue;
       }
-      if (name.equalsIgnoreCase("Content-Type") && value.toLowerCase(java.util.Locale.ROOT).contains("charset=")) {
-        String charset = value.substring(value.toLowerCase(java.util.Locale.ROOT).indexOf("charset=") + 8).strip();
-        if (!charset.equalsIgnoreCase("utf-8") && !charset.equalsIgnoreCase("utf8")) {
-          throw new IOException("Only UTF-8 LSP bodies are supported");
-        }
-      }
+      if (!name.equalsIgnoreCase("Content-Type")) continue;
+      validateContentType(value);
     }
     if (length == null) throw new IOException("Missing Content-Length");
     byte[] body = input.readNBytes(length);
     if (body.length != length) throw new EOFException("Truncated LSP body");
     return body;
+  }
+
+  private static int matchDelimiter(int value, int matched, byte[] delimiter) {
+    if (value == delimiter[matched]) return matched + 1;
+    if (value == '\r') return 1;
+    return 0;
+  }
+
+  private static int contentLength(String value, Integer previous) throws IOException {
+    if (previous != null || !value.matches("[0-9]{1,9}")) {
+      throw new IOException("Invalid or duplicate Content-Length");
+    }
+    int length = Integer.parseInt(value);
+    if (length > MAX_BODY) throw new IOException("LSP body exceeds 8 MiB");
+    return length;
+  }
+
+  private static void validateContentType(String value) throws IOException {
+    int index = value.toLowerCase(java.util.Locale.ROOT).indexOf("charset=");
+    if (index < 0) return;
+    String charset = value.substring(index + 8).strip();
+    if (!charset.equalsIgnoreCase("utf-8") && !charset.equalsIgnoreCase("utf8")) {
+      throw new IOException("Only UTF-8 LSP bodies are supported");
+    }
   }
 
   public static void write(OutputStream output, String json) throws IOException {
@@ -67,3 +82,4 @@ public final class Framing {
     output.flush();
   }
 }
+

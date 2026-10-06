@@ -33,11 +33,48 @@ public final class JavacCompiler implements CompilerAdapter {
 
   @Override
   public ParseResult parse(SourceSnapshot source) throws ParseException {
+    java.util.Objects.requireNonNull(source, "source");
+    URI compilerUri = compilerUri(source);
+    Parsed parsed = parseCompiler(source, compilerUri);
+    var diagnostics = new ArrayList<Diagnostic>();
+    var notices = new ArrayList<String>();
+    var lines = new Lines(source.text());
+    for (var d : parsed.diagnostics()) {
+      String message = d.getMessage(Locale.ROOT);
+      if (d.getSource() == null) {
+        notices.add(message);
+        continue;
+      }
+      long start = d.getStartPosition();
+      if (start == javax.tools.Diagnostic.NOPOS) start = d.getPosition();
+      // A source diagnostic without any usable offset is anchored at the start of the file.
+      int from = clamp(start, source.text().length());
+      long end = d.getEndPosition();
+      int to = end == javax.tools.Diagnostic.NOPOS ? from : Math.max(from, clamp(end, source.text().length()));
+      var severity = switch (d.getKind()) {
+        case ERROR -> Diagnostic.Severity.ERROR;
+        case WARNING, MANDATORY_WARNING -> Diagnostic.Severity.WARNING;
+        default -> Diagnostic.Severity.INFORMATION;
+      };
+      diagnostics.add(new Diagnostic(new Range(lines.at(from), lines.at(to)), severity,
+          d.getCode() == null ? "" : d.getCode(), message));
+    }
+    if (!parsed.auxiliary().isBlank()) notices.add(parsed.auxiliary().strip());
+    return new ParseResult(source, diagnostics, notices);
+  }
+
+  private static URI compilerUri(SourceSnapshot source) throws ParseException {
+    try { return new URI("string", null, "/" + source.fileName(), null); }
+    catch (URISyntaxException failure) { throw new ParseException("Cannot prepare " + source.uri(), failure); }
+  }
+
+  private record Parsed(List<javax.tools.Diagnostic<? extends JavaFileObject>> diagnostics, String auxiliary) {}
+
+  private static Parsed parseCompiler(SourceSnapshot source, URI compilerUri) throws ParseException {
     var compiler = ToolProvider.getSystemJavaCompiler();
     var collected = new DiagnosticCollector<JavaFileObject>();
     var auxiliary = new StringWriter();
     try (var files = compiler.getStandardFileManager(collected, Locale.ROOT, StandardCharsets.UTF_8)) {
-      URI compilerUri = new URI("string", null, "/" + source.fileName(), null);
       var unit = new SimpleJavaFileObject(compilerUri, JavaFileObject.Kind.SOURCE) {
         @Override public CharSequence getCharContent(boolean ignoreEncodingErrors) {
           return source.text();
@@ -48,32 +85,9 @@ public final class JavacCompiler implements CompilerAdapter {
           List.of("-proc:none", "-Xlint:none", "-Xmaxerrs", "100"),
           null, List.of(unit));
       task.parse();
-      var diagnostics = new ArrayList<Diagnostic>();
-      var notices = new ArrayList<String>();
-      var lines = new Lines(source.text());
-      for (var d : collected.getDiagnostics()) {
-        String message = d.getMessage(Locale.ROOT);
-        if (d.getSource() == null) {
-          notices.add(message);
-          continue;
-        }
-        long start = d.getStartPosition();
-        if (start == javax.tools.Diagnostic.NOPOS) start = d.getPosition();
-        // A source diagnostic without any usable offset is anchored at the start of the file.
-        int from = clamp(start, source.text().length());
-        long end = d.getEndPosition();
-        int to = end == javax.tools.Diagnostic.NOPOS ? from : Math.max(from, clamp(end, source.text().length()));
-        var severity = switch (d.getKind()) {
-          case ERROR -> Diagnostic.Severity.ERROR;
-          case WARNING, MANDATORY_WARNING -> Diagnostic.Severity.WARNING;
-          default -> Diagnostic.Severity.INFORMATION;
-        };
-        diagnostics.add(new Diagnostic(new Range(lines.at(from), lines.at(to)), severity,
-            d.getCode() == null ? "" : d.getCode(), message));
-      }
-      if (!auxiliary.toString().isBlank()) notices.add(auxiliary.toString().strip());
-      return new ParseResult(source, diagnostics, notices);
-    } catch (IOException | URISyntaxException | RuntimeException | LinkageError | StackOverflowError failure) {
+      return new Parsed(List.copyOf(collected.getDiagnostics()), auxiliary.toString());
+    } catch (IOException | RuntimeException | LinkageError | StackOverflowError failure) {
+      // javac may fail on hostile source. Contain compiler failures while leaving our mapping bugs visible.
       throw new ParseException("Cannot parse " + source.uri(), failure);
     }
   }
@@ -92,10 +106,9 @@ public final class JavacCompiler implements CompilerAdapter {
       positions.add(0);
       for (int i = 0; i < text.length(); i++) {
         char c = text.charAt(i);
-        if (c == '\r') {
-          if (i + 1 < text.length() && text.charAt(i + 1) == '\n') i++;
-          positions.add(i + 1);
-        } else if (c == '\n') positions.add(i + 1);
+        if (c != '\r' && c != '\n') continue;
+        if (c == '\r' && i + 1 < text.length() && text.charAt(i + 1) == '\n') i++;
+        positions.add(i + 1);
       }
       starts = positions.stream().mapToInt(Integer::intValue).toArray();
     }
@@ -109,3 +122,4 @@ public final class JavacCompiler implements CompilerAdapter {
     }
   }
 }
+

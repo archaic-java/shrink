@@ -99,6 +99,8 @@ record ProtocolErrorsDoNotBreakTheSession() implements TestCase {
       assert client.receive().getJsonObject("error").getInt("code") == -32600 : "Non-object JSON must return InvalidRequest";
       client.raw("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}");
       assert client.receive().getJsonObject("error").getInt("code") == -32602 : "Invalid initialize parameters must return InvalidParams";
+      client.raw("{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"initialize\",\"params\":{\"capabilities\":[]}}");
+      assert client.receive().getJsonObject("error").getInt("code") == -32602 : "Wrong parameter types must return InvalidParams";
       client.raw("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"unknown\"}");
       assert client.receive().getJsonObject("error").getInt("code") == -32002 : "Requests before initialization must be rejected";
       client.initialize(false);
@@ -184,3 +186,4 @@ record DebugOutputStaysOnStderr() implements TestCase {
     }
   }
 }
+

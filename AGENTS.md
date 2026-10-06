@@ -1,5 +1,8 @@
 # shrink
 
+Read [the maintenance skill](skills/maintain-shrink/SKILL.md) first, then its task references.
+If skills are not discovered automatically, open that Markdown file directly.
+
 - Build with `--release 25`; accept JDK 25 and newer at runtime, preview disabled.
   Parse with the running JDK's default source level, not a fixed source/release option.
   Compile and launch only through JDK tools and named JPMS modules.
@@ -17,4 +20,5 @@
   Operational objects implement Logging; debug messages use suppliers. Keep the compiler independently usable.
 - Minau v02 tests use `-ea`, public suite records, package-private cases and inline `assert condition : "reason"` checks.
   Do not create assertion helper methods. Launch Minau directly from `cmd/test`.
-- Keep generated `out/` untracked. Document protocol or editor-facing behavior in `docs/`.
+- Keep generated `out/` untracked. Document protocol or editor-facing behavior in `skills/maintain-shrink/references/`.
+

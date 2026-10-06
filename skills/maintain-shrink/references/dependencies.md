@@ -63,3 +63,4 @@ jar --describe-module --file lib/bin/parsson-1.1.7.jar
 ```
 
 GitHub Actions checkout and setup-java actions are pinned to commit SHAs in the workflow.
+

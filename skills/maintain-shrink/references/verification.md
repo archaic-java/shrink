@@ -16,15 +16,17 @@ javac @cmd/compile
 java @cmd/test
 ```
 
-The Minau v02 suite contains 22 independently registered cases across five public suite records. Coverage includes:
+The Minau v02 suite contains 24 independently registered cases across five public suite records. Coverage includes:
 
 - Java syntax errors, corrections, empty source, unresolved dependencies and module-info.java.
 - LF, CRLF, CR, tabs, supplementary Unicode, Java Unicode escapes and EOF coordinates.
-- Immutable results and concurrent independent adapter calls.
+- Immutable results, null-source rejection, and concurrent independent adapter calls with bounded waits.
 - Compilation and launch of an independent named consumer module without the server, JSON or Minau
-  in its resolved module graph.
+  or Culpa in its resolved module graph. Consumer compilation, execution, and output draining
+  have a ten-second deadline; the consumer runs with assertions enabled.
 - UTF-8 byte framing, short reads, consecutive frames, duplicate/invalid lengths and truncated input.
 - Debouncing, coalescing, fairness, version ordering and close/reopen generations using supplied time.
+- Checked duplicate-open and capacity rejection without mutating accepted documents.
 - A controlled in-flight parser completing after close/reopen, adapter failure reporting, and shutdown
   while a parser deliberately ignores interruption.
 - Actual server subprocesses launched from empty temporary working directories; initialization,
@@ -47,8 +49,7 @@ and tests on a clean checkout using the same public commands. Workflow results a
 
 ## Real editor smoke test
 
-Helix **25.07.1 (a05c151b)** was run in a real pseudoterminal with the configuration from the Helix
-guide, using absolute JDK and module paths. `hx --health java` found shrink and the Java grammar.
+Helix **25.07.1 (a05c151b)** was run in a real pseudoterminal with the configuration from the [Helix guide](helix.md), using absolute JDK and module paths. `hx --health java` found shrink and the Java grammar.
 
 The initial file contained `class Demo { int count = 1; }`. Deleting `1` without saving produced:
 
@@ -69,3 +70,4 @@ status 0. These observations are from the editor process, separate from the simu
 
 This establishes the documented basic workflow on that Helix version. It is not a performance
 benchmark or a claim that all editors and every Helix version have been tested.
+

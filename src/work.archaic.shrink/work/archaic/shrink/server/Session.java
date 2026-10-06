@@ -42,21 +42,28 @@ public final class Session implements Logging {
   private Integer exitStatus;
 
   public Session(InputStream input, OutputStream output, CompilerAdapter compiler, Log logging, Configuration configuration) {
-    this.input = input;
-    this.output = output;
-    this.compiler = compiler;
+    this.input = java.util.Objects.requireNonNull(input, "input");
+    this.output = java.util.Objects.requireNonNull(output, "output");
+    this.compiler = java.util.Objects.requireNonNull(compiler, "compiler");
     this.logging = java.util.Objects.requireNonNull(logging);
     this.configuration = java.util.Objects.requireNonNull(configuration);
     this.context = logging.context(configuration);
   }
 
-  public int run() throws Exception {
-    context.run(() -> {
-      logOnFailure("Serving editor session");
-      serve();
-      if (exitStatus != 0) context.fail("Language-server session ended abnormally");
-    });
+  public int run() throws SessionException {
+    context.run(this::serveSession);
     return exitStatus;
+  }
+
+  private void serveSession() throws SessionException {
+    logOnFailure("Serving editor session");
+    try { serve(); }
+    catch (IOException failure) { throw new SessionException("Session transport failed", failure); }
+    catch (InterruptedException stopped) {
+      Thread.currentThread().interrupt();
+      throw new SessionException("Session interrupted", stopped);
+    }
+    if (exitStatus != 0) context.fail("Language-server session ended abnormally");
   }
 
   private void serve() throws IOException, InterruptedException {
@@ -74,13 +81,7 @@ public final class Session implements Logging {
     });
     try {
       while (exitStatus == null) {
-        if (!busy && state == State.ACTIVE) {
-          Documents.Work next = documents.takeReady(System.nanoTime());
-          if (next != null) {
-            busy = true;
-            worker.execute(() -> analyze(next));
-          }
-        }
+        startReadyAnalysis(worker);
         long wait = !busy && state == State.ACTIVE ? documents.waitNanos(System.nanoTime()) : Long.MAX_VALUE;
         Event event = events.poll(wait, TimeUnit.NANOSECONDS);
         if (event == null) continue;
@@ -103,6 +104,14 @@ public final class Session implements Logging {
     }
   }
 
+  private void startReadyAnalysis(java.util.concurrent.Executor worker) {
+    if (busy || state != State.ACTIVE) return;
+    Documents.Work next = documents.takeReady(System.nanoTime());
+    if (next == null) return;
+    busy = true;
+    worker.execute(() -> analyze(next));
+  }
+
   private void analyze(Documents.Work work) {
     try {
       // Child tasks establish independent contexts; the session context stays on its event loop.
@@ -122,16 +131,8 @@ public final class Session implements Logging {
   private void receive(byte[] body) throws IOException {
     JsonValue decoded;
     try {
-      String text = StandardCharsets.UTF_8.newDecoder()
-          .onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT)
-          .decode(ByteBuffer.wrap(body)).toString();
-      try (var parser = Json.createParser(new StringReader(text))) {
-        if (!parser.hasNext()) throw new IllegalArgumentException("Empty JSON body");
-        parser.next();
-        decoded = parser.getValue();
-        if (parser.hasNext()) throw new IllegalArgumentException("Trailing JSON value");
-      }
-    } catch (RuntimeException | CharacterCodingException malformed) {
+      decoded = decodeMessage(body);
+    } catch (JsonException | CharacterCodingException malformed) {
       error(JsonValue.NULL, -32700, "Parse error");
       return;
     }
@@ -150,85 +151,148 @@ public final class Session implements Logging {
     String method = message.getString("method");
     logOnFailure("Received " + method + " in " + state);
     try {
-      if (method.equals("exit") && !request) {
-        if (state != State.SHUTDOWN) logOnFailure("LSP client exited before shutdown");
-        exitStatus = state == State.SHUTDOWN ? 0 : 1;
-        return;
-      }
-      if (method.equals("initialize") && request) {
-        if (state != State.NEW) { error(id, -32600, "Already initialized"); return; }
-        JsonObject params = object(message.get("params"));
-        JsonObject capabilities = object(params.get("capabilities"));
-        JsonObject textDocument = optionalObject(capabilities, "textDocument");
-        JsonObject publish = optionalObject(textDocument, "publishDiagnostics");
-        versionSupport = publish.get("versionSupport") == JsonValue.TRUE;
-        state = State.INITIALIZING;
-        result(id, Json.createObjectBuilder()
-            .add("capabilities", Json.createObjectBuilder().add("positionEncoding", "utf-16")
-                .add("textDocumentSync", Json.createObjectBuilder().add("openClose", true).add("change", 1)))
-            .add("serverInfo", Json.createObjectBuilder().add("name", "shrink").add("version", "0.1.0"))
-            .build());
-        return;
-      }
-      if (state == State.NEW || state == State.INITIALIZING) {
-        if (method.equals("initialized") && !request && state == State.INITIALIZING) {
-          object(message.get("params"));
-          state = State.ACTIVE;
-        } else if (request) error(id, -32002, "Server not initialized");
-        return;
-      }
-      if (state == State.SHUTDOWN) {
-        if (request) error(id, -32600, "Server has shut down");
-        return;
-      }
-      if (method.equals("shutdown") && request) {
-        state = State.SHUTDOWN;
-        documents.clear();
-        result(id, JsonValue.NULL);
-        return;
-      }
+      dispatch(message, id, request, method);
+    } catch (InvalidParamsException | DocumentUpdateException failure) {
       if (request) {
-        error(id, -32601, "Method not found: " + method);
+        error(id, -32602, "Invalid params");
         return;
       }
-      switch (method) {
-        case "textDocument/didOpen" -> {
-          JsonObject document = object(object(message.get("params")).get("textDocument"));
-          if (!string(document, "languageId").equals("java")) return;
-          URI uri = uri(document);
-          String path = uri.getPath();
-          String name = path == null ? "Buffer.java" : path.substring(path.lastIndexOf('/') + 1);
-          if (!name.endsWith(".java") || name.length() <= 5) name = "Buffer.java";
-          documents.open(new SourceSnapshot(uri, name, string(document, "text")), integer(document, "version"), System.nanoTime());
-        }
-        case "textDocument/didChange" -> {
-          JsonObject params = object(message.get("params"));
-          JsonObject document = object(params.get("textDocument"));
-          JsonValue changesValue = params.get("contentChanges");
-          if (!(changesValue instanceof JsonArray changes) || changes.isEmpty()) {
-            throw new IllegalArgumentException("Expected full contentChanges");
-          }
-          String text = null;
-          for (JsonValue item : changes) {
-            JsonObject change = object(item);
-            if (change.containsKey("range") || change.containsKey("rangeLength")) {
-              throw new IllegalArgumentException("Only full synchronization is supported");
-            }
-            text = string(change, "text");
-          }
-          documents.change(uri(document), integer(document, "version"), text, System.nanoTime());
-        }
-        case "textDocument/didClose" -> {
-          URI uri = uri(object(object(message.get("params")).get("textDocument")));
-          documents.close(uri);
-          publish(uri, null, Json.createArrayBuilder().build());
-        }
-        default -> { /* Unknown notifications require no response. */ }
-      }
-    } catch (IllegalArgumentException | ClassCastException failure) {
-      if (request) error(id, -32602, "Invalid params");
-      else logOnFailure("Ignored invalid " + method + ": " + failure.getMessage());
+      logOnFailure("Ignored invalid " + method + ": " + failure.getMessage());
     }
+  }
+
+  private static JsonValue decodeMessage(byte[] body) throws CharacterCodingException {
+    String text = StandardCharsets.UTF_8.newDecoder()
+        .onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT)
+        .decode(ByteBuffer.wrap(body)).toString();
+    try (var parser = Json.createParser(new StringReader(text))) {
+      if (!parser.hasNext()) throw new JsonException("Empty JSON body");
+      parser.next();
+      JsonValue value = parser.getValue();
+      if (parser.hasNext()) throw new JsonException("Trailing JSON value");
+      return value;
+    }
+  }
+
+  private void dispatch(JsonObject message, JsonValue id, boolean request, String method)
+      throws IOException, InvalidParamsException, DocumentUpdateException {
+    if (method.equals("exit") && !request) {
+      exitSession();
+      return;
+    }
+    if (method.equals("initialize") && request) {
+      initialize(message, id);
+      return;
+    }
+    if (state == State.NEW || state == State.INITIALIZING) {
+      beforeInitialized(message, id, request, method);
+      return;
+    }
+    if (state == State.SHUTDOWN) {
+      afterShutdown(id, request);
+      return;
+    }
+    if (method.equals("shutdown") && request) {
+      state = State.SHUTDOWN;
+      documents.clear();
+      result(id, JsonValue.NULL);
+      return;
+    }
+    if (request) {
+      error(id, -32601, "Method not found: " + method);
+      return;
+    }
+    switch (method) {
+      case "textDocument/didOpen" -> openDocument(message);
+      case "textDocument/didChange" -> changeDocument(message);
+      case "textDocument/didClose" -> closeDocument(message);
+      default -> { /* Unknown notifications require no response. */ }
+    }
+  }
+
+  private void afterShutdown(JsonValue id, boolean request) throws IOException {
+    if (!request) return;
+    error(id, -32600, "Server has shut down");
+  }
+
+  private void exitSession() {
+    if (state != State.SHUTDOWN) logOnFailure("LSP client exited before shutdown");
+    exitStatus = state == State.SHUTDOWN ? 0 : 1;
+  }
+
+  private void initialize(JsonObject message, JsonValue id) throws IOException, InvalidParamsException {
+    if (state != State.NEW) {
+      error(id, -32600, "Already initialized");
+      return;
+    }
+    JsonObject params = object(message.get("params"));
+    JsonObject capabilities = object(params.get("capabilities"));
+    JsonObject textDocument = optionalObject(capabilities, "textDocument");
+    JsonObject publish = optionalObject(textDocument, "publishDiagnostics");
+    versionSupport = publish.get("versionSupport") == JsonValue.TRUE;
+    state = State.INITIALIZING;
+    result(id, Json.createObjectBuilder()
+        .add("capabilities", Json.createObjectBuilder().add("positionEncoding", "utf-16")
+            .add("textDocumentSync", Json.createObjectBuilder().add("openClose", true).add("change", 1)))
+        .add("serverInfo", Json.createObjectBuilder().add("name", "shrink").add("version", "0.1.0"))
+        .build());
+  }
+
+  private void beforeInitialized(JsonObject message, JsonValue id, boolean request, String method)
+      throws IOException, InvalidParamsException {
+    if (method.equals("initialized") && !request && state == State.INITIALIZING) {
+      object(message.get("params"));
+      state = State.ACTIVE;
+      return;
+    }
+    if (request) error(id, -32002, "Server not initialized");
+  }
+
+  private void openDocument(JsonObject message) throws InvalidParamsException, DocumentUpdateException {
+    JsonObject document = object(object(message.get("params")).get("textDocument"));
+    if (!string(document, "languageId").equals("java")) return;
+    URI uri = uri(document);
+    int version = integer(document, "version");
+    String text = string(document, "text");
+    String path = uri.getPath();
+    String name = path == null ? "Buffer.java" : path.substring(path.lastIndexOf('/') + 1);
+    if (!name.endsWith(".java") || name.length() <= 5) name = "Buffer.java";
+    SourceSnapshot source = snapshot(uri, name, text);
+    documents.open(source, version, System.nanoTime());
+  }
+
+  private static SourceSnapshot snapshot(URI uri, String name, String text) throws InvalidParamsException {
+    // Translate only the published record's input validation, not document mutation or dispatch.
+    try { return new SourceSnapshot(uri, name, text); }
+    catch (IllegalArgumentException failure) { throw new InvalidParamsException("Invalid source identity", failure); }
+  }
+
+  private void changeDocument(JsonObject message) throws InvalidParamsException, DocumentUpdateException {
+    JsonObject params = object(message.get("params"));
+    JsonObject document = object(params.get("textDocument"));
+    URI uri = uri(document);
+    int version = integer(document, "version");
+    JsonValue changesValue = params.get("contentChanges");
+    if (!(changesValue instanceof JsonArray changes) || changes.isEmpty()) {
+      throw new InvalidParamsException("Expected full contentChanges");
+    }
+    String text = null;
+    for (JsonValue item : changes) text = fullChange(item);
+    documents.change(uri, version, text, System.nanoTime());
+  }
+
+  private static String fullChange(JsonValue item) throws InvalidParamsException {
+    JsonObject change = object(item);
+    if (change.containsKey("range") || change.containsKey("rangeLength")) {
+      throw new InvalidParamsException("Only full synchronization is supported");
+    }
+    return string(change, "text");
+  }
+
+  private void closeDocument(JsonObject message) throws IOException, InvalidParamsException {
+    URI uri = uri(object(object(message.get("params")).get("textDocument")));
+    documents.close(uri);
+    publish(uri, null, Json.createArrayBuilder().build());
   }
 
   private void completed(Completed completed) throws IOException {
@@ -280,37 +344,40 @@ public final class Session implements Logging {
 
   private static boolean validId(JsonValue value) {
     if (value instanceof JsonString) return true;
-    if (value instanceof JsonNumber number && number.isIntegral()) {
-      try { number.intValueExact(); return true; } catch (ArithmeticException outsideRange) { return false; }
-    }
-    return false;
+    if (!(value instanceof JsonNumber number) || !number.isIntegral()) return false;
+    try { number.intValueExact(); return true; }
+    catch (ArithmeticException outsideRange) { return false; }
   }
 
-  private static JsonObject object(JsonValue value) {
-    if (!(value instanceof JsonObject object)) throw new IllegalArgumentException("Expected an object");
+  private static JsonObject object(JsonValue value) throws InvalidParamsException {
+    if (!(value instanceof JsonObject object)) throw new InvalidParamsException("Expected an object");
     return object;
   }
 
-  private static JsonObject optionalObject(JsonObject parent, String key) {
+  private static JsonObject optionalObject(JsonObject parent, String key) throws InvalidParamsException {
     return parent.containsKey(key) ? object(parent.get(key)) : JsonValue.EMPTY_JSON_OBJECT;
   }
 
-  private static String string(JsonObject object, String key) {
-    if (!(object.get(key) instanceof JsonString value)) throw new IllegalArgumentException("Expected string: " + key);
+  private static String string(JsonObject object, String key) throws InvalidParamsException {
+    if (!(object.get(key) instanceof JsonString value)) throw new InvalidParamsException("Expected string: " + key);
     return value.getString();
   }
 
-  private static int integer(JsonObject object, String key) {
+  private static int integer(JsonObject object, String key) throws InvalidParamsException {
     if (!(object.get(key) instanceof JsonNumber value) || !value.isIntegral()) {
-      throw new IllegalArgumentException("Expected integer: " + key);
+      throw new InvalidParamsException("Expected integer: " + key);
     }
     try { return value.intValueExact(); }
-    catch (ArithmeticException outsideRange) { throw new IllegalArgumentException("Integer outside range: " + key); }
+    catch (ArithmeticException outsideRange) { throw new InvalidParamsException("Integer outside range: " + key, outsideRange); }
   }
 
-  private static URI uri(JsonObject object) {
-    URI uri = URI.create(string(object, "uri"));
-    if (!uri.isAbsolute()) throw new IllegalArgumentException("Expected absolute URI");
+  private static URI uri(JsonObject object) throws InvalidParamsException {
+    String text = string(object, "uri");
+    URI uri;
+    try { uri = new URI(text); }
+    catch (java.net.URISyntaxException malformed) { throw new InvalidParamsException("Invalid URI", malformed); }
+    if (!uri.isAbsolute()) throw new InvalidParamsException("Expected absolute URI");
     return uri;
   }
 }
+
