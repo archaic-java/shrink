@@ -1,0 +1,4 @@
+interface:
+  display_name: "Maintain Shrink"
+  short_description: "Maintain Shrink compiler and language server"
+  default_prompt: "Use $maintain-shrink to update Shrink and verify its compiler and protocol behavior."

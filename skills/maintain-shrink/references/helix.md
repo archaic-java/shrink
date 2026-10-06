@@ -86,3 +86,4 @@ with shrink while retaining jdtls navigation and completion.
 
 References: [Helix language configuration](https://docs.helix-editor.com/languages.html) and
 [Helix LSP commands](https://docs.helix-editor.com/master/lsp.html).
+

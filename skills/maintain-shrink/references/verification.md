@@ -47,8 +47,7 @@ and tests on a clean checkout using the same public commands. Workflow results a
 
 ## Real editor smoke test
 
-Helix **25.07.1 (a05c151b)** was run in a real pseudoterminal with the configuration from the Helix
-guide, using absolute JDK and module paths. `hx --health java` found shrink and the Java grammar.
+Helix **25.07.1 (a05c151b)** was run in a real pseudoterminal with the configuration from the [Helix guide](helix.md), using absolute JDK and module paths. `hx --health java` found shrink and the Java grammar.
 
 The initial file contained `class Demo { int count = 1; }`. Deleting `1` without saving produced:
 
@@ -69,3 +68,4 @@ status 0. These observations are from the editor process, separate from the simu
 
 This establishes the documented basic workflow on that Helix version. It is not a performance
 benchmark or a claim that all editors and every Helix version have been tested.
+

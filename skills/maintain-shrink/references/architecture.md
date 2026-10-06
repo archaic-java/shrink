@@ -134,3 +134,4 @@ are rejected without altering the accepted snapshot.
 Shutdown clears document state and disables publication before responding. Interrupting javac is
 best effort; the server never waits for the parser to finish during shutdown. The standalone
 process exits with 0 after shutdown/exit and 1 for an abnormal exit or broken transport.
+

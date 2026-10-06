@@ -40,7 +40,7 @@ an existing dirty or differently pinned sibling checkout. Use a separate parent 
 you already develop those repositories at another revision.
 
 `java @cmd/run` waits for framed LSP input; it is not an interactive terminal command.
-Use the [Helix guide](docs/helix.md) to launch it from your editor. `java @cmd/test` runs Minau
+Use the [Helix guide](skills/maintain-shrink/references/helix.md) to launch it from your editor. `java @cmd/test` runs Minau
 directly with assertions. Adapter-failure tests capture Culpa reports and verify that the
 session remains usable; the final test summary determines success.
 
@@ -76,6 +76,9 @@ diagnostics. Completion, navigation, formatting, outline and build orchestration
 `ServiceLoader` without loading the LSP server or JSON libraries. Shrink uses Culpa logging v03 with an independent context for the editor session
 and each document analysis. Contexts run on the existing event loop or parser worker;
 logging creates no extra thread. Failure evidence and compiler notices go to stderr.
-Debug messages use lazy suppliers; enable them with `JAVA_TOOL_OPTIONS=-Dshrink.debug=true`. See [architecture and API usage](docs/architecture.md).
+Debug messages use lazy suppliers; enable them with `JAVA_TOOL_OPTIONS=-Dshrink.debug=true`. See [architecture and API usage](skills/maintain-shrink/references/architecture.md).
 
-See also [dependency pins and licenses](docs/dependencies.md) and [verification](docs/verification.md).
+See also [dependency pins and licenses](skills/maintain-shrink/references/dependencies.md) and [verification](skills/maintain-shrink/references/verification.md).
+
+
+For maintenance, read the shared [Shrink maintenance skill](skills/maintain-shrink/SKILL.md).
