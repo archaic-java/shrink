@@ -16,15 +16,17 @@ javac @cmd/compile
 java @cmd/test
 ```
 
-The Minau v02 suite contains 22 independently registered cases across five public suite records. Coverage includes:
+The Minau v02 suite contains 24 independently registered cases across five public suite records. Coverage includes:
 
 - Java syntax errors, corrections, empty source, unresolved dependencies and module-info.java.
 - LF, CRLF, CR, tabs, supplementary Unicode, Java Unicode escapes and EOF coordinates.
-- Immutable results and concurrent independent adapter calls.
+- Immutable results, null-source rejection, and concurrent independent adapter calls with bounded waits.
 - Compilation and launch of an independent named consumer module without the server, JSON or Minau
-  in its resolved module graph.
+  or Culpa in its resolved module graph. Consumer compilation, execution, and output draining
+  have a ten-second deadline; the consumer runs with assertions enabled.
 - UTF-8 byte framing, short reads, consecutive frames, duplicate/invalid lengths and truncated input.
 - Debouncing, coalescing, fairness, version ordering and close/reopen generations using supplied time.
+- Checked duplicate-open and capacity rejection without mutating accepted documents.
 - A controlled in-flight parser completing after close/reopen, adapter failure reporting, and shutdown
   while a parser deliberately ignores interruption.
 - Actual server subprocesses launched from empty temporary working directories; initialization,

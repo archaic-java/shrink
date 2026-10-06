@@ -20,6 +20,7 @@ public record CompilerTest() implements TestSuite {
     cases.add(new HandlesEndOfFileAndImmutableResults());
     cases.add(new AdapterCallsAreIndependent());
     cases.add(new IndependentModuleUsesCompilerService());
+    cases.add(new NullSourceIsAProgrammingError());
   }
 
   static SourceSnapshot source(String name, String text) {
@@ -113,7 +114,7 @@ record AdapterCallsAreIndependent() implements TestCase {
         futures.add(executor.submit(() -> compiler.parse(CompilerTest.source("File" + index + ".java", "class File" + index + " {}"))));
       }
       for (int i = 0; i < futures.size(); i++) {
-        var result = futures.get(i).get();
+        var result = futures.get(i).get(10, java.util.concurrent.TimeUnit.SECONDS);
         assert result.diagnostics().isEmpty() : "Independent parser call " + i + " must have no syntax errors";
         assert result.source().fileName().equals("File" + i + ".java") : "Parser call " + i + " must retain its own source identity";
       }
@@ -137,12 +138,12 @@ record IndependentModuleUsesCompilerService() implements TestCase {
           public class Main {
             public static void main(String[] args) throws Exception {
               var providers = ServiceLoader.load(CompilerAdapter.class).stream().toList();
-              if (providers.size() != 1) throw new AssertionError("Expected one compiler provider");
+              assert providers.size() == 1 : "Expected one compiler provider";
               CompilerAdapter compiler = providers.getFirst().get();
               var source = new SourceSnapshot(URI.create("memory:/A.java"), "A.java", "class A {}");
-              if (!compiler.parse(source).diagnostics().isEmpty()) throw new AssertionError("Expected valid source");
-              for (String excluded : new String[]{"work.archaic.shrink", "jakarta.json", "org.eclipse.parsson", "work.archaic.minau"}) {
-                if (ModuleLayer.boot().findModule(excluded).isPresent()) throw new AssertionError(excluded);
+              assert compiler.parse(source).diagnostics().isEmpty() : "Expected valid source";
+              for (String excluded : new String[]{"work.archaic.shrink", "jakarta.json", "org.eclipse.parsson", "work.archaic.minau", "work.archaic.culpa"}) {
+                assert ModuleLayer.boot().findModule(excluded).isEmpty() : "Consumer must not resolve " + excluded;
               }
             }
           }
@@ -151,17 +152,61 @@ record IndependentModuleUsesCompilerService() implements TestCase {
       String modules = Path.of("out").toAbsolutePath().toString();
       var compile = new ProcessBuilder(jdkBin + "/javac", "--module-path", modules, "-d", directory.resolve("classes").toString(),
           descriptor.toString(), main.toString()).redirectErrorStream(true).start();
-      String compileOutput = new String(compile.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-      assert compile.waitFor() == 0 : "Independent consumer must compile: " + compileOutput;
-      var run = new ProcessBuilder(jdkBin + "/java", "--module-path", modules + ":" + directory.resolve("classes"),
+      var compilation = ConsumerProcess.await(compile);
+      assert compilation.exitCode() == 0 : "Independent consumer must compile: " + compilation.output();
+      var run = new ProcessBuilder(jdkBin + "/java", "-ea", "--module-path", modules + ":" + directory.resolve("classes"),
           "--add-modules", "work.archaic.shrink.compiler", "-m", "example.consumer/example.consumer.Main").redirectErrorStream(true).start();
-      String runOutput = new String(run.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-      assert run.waitFor() == 0 : "Independent consumer must discover only the compiler provider: " + runOutput;
+      var execution = ConsumerProcess.await(run);
+      assert execution.exitCode() == 0 : "Independent consumer must discover only the compiler provider: " + execution.output();
       trail.note("Compiled and ran a contract-only compiler consumer");
     } finally {
       try (var files = Files.walk(directory)) {
         for (var file : files.sorted(java.util.Comparator.reverseOrder()).toList()) Files.delete(file);
       }
     }
+  }
+}
+
+
+/** Collect subprocess observations with one deadline for execution and pipe draining. */
+final class ConsumerProcess {
+  record Result(int exitCode, String output) {}
+  private ConsumerProcess() {}
+
+  static Result await(Process process) throws Exception {
+    var output = new java.util.concurrent.CompletableFuture<String>();
+    Thread reader = Thread.ofVirtual().start(() -> {
+      try {
+        output.complete(new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8));
+      } catch (java.io.IOException failure) { output.completeExceptionally(failure); }
+    });
+    long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
+    try {
+      if (!process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)) {
+        throw new java.util.concurrent.TimeoutException("Consumer process exceeded its deadline");
+      }
+      long remaining = Math.max(0, deadline - System.nanoTime());
+      return new Result(process.exitValue(), output.get(remaining, java.util.concurrent.TimeUnit.NANOSECONDS));
+    } finally {
+      process.destroyForcibly();
+      process.getInputStream().close();
+      reader.interrupt();
+      reader.join(1000);
+    }
+  }
+}
+
+record NullSourceIsAProgrammingError() implements TestCase {
+  @Override public void run(TestTrail trail) throws Exception {
+    var compiler = CompilerTest.compiler();
+    try {
+      compiler.parse(null);
+      assert false : "A null source must be rejected as incorrect API usage";
+    } catch (NullPointerException expected) {
+      assert expected.getMessage().equals("source") : "Null-source guard must identify the invalid argument";
+    }
+    assert compiler.parse(CompilerTest.source("Valid.java", "class Valid {}")).diagnostics().isEmpty()
+        : "Rejected API input must leave the adapter reusable";
+    trail.note("Verified null precondition stays outside compiler-failure translation");
   }
 }
