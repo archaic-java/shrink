@@ -17,16 +17,16 @@ public final class Documents {
 
   public Documents(long debounceNanos) { this.debounceNanos = debounceNanos; }
 
-  public void open(SourceSnapshot source, int version, long now) {
-    if (open.containsKey(source.uri())) throw new IllegalArgumentException("Document already open");
-    if (open.size() >= 128) throw new IllegalArgumentException("At most 128 open documents are supported");
+  public void open(SourceSnapshot source, int version, long now) throws DocumentUpdateException {
+    if (open.containsKey(source.uri())) throw new DocumentUpdateException("Document already open");
+    if (open.size() >= 128) throw new DocumentUpdateException("At most 128 open documents are supported");
     put(new Work(source, version, ++generation), now);
   }
 
-  public void change(URI uri, int version, String text, long now) {
+  public void change(URI uri, int version, String text, long now) throws DocumentUpdateException {
     Work old = open.get(uri);
-    if (old == null) throw new IllegalArgumentException("Document is not open");
-    if (version <= old.version()) throw new IllegalArgumentException("Document version must increase");
+    if (old == null) throw new DocumentUpdateException("Document is not open");
+    if (version <= old.version()) throw new DocumentUpdateException("Document version must increase");
     put(new Work(new SourceSnapshot(uri, old.source().fileName(), text), version, old.generation()), now);
   }
 
@@ -53,10 +53,9 @@ public final class Documents {
     var iterator = pending.values().iterator();
     while (iterator.hasNext()) {
       Pending next = iterator.next();
-      if (now - next.due() >= 0) {
-        iterator.remove();
-        return next.work();
-      }
+      if (now - next.due() < 0) continue;
+      iterator.remove();
+      return next.work();
     }
     return null;
   }
@@ -69,3 +68,4 @@ public final class Documents {
 
   public void clear() { open.clear(); pending.clear(); }
 }
+

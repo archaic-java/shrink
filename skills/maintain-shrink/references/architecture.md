@@ -135,3 +135,22 @@ Shutdown clears document state and disables publication before responding. Inter
 best effort; the server never waits for the parser to finish during shutdown. The standalone
 process exits with 0 after shutdown/exit and 1 for an abnormal exit or broken transport.
 
+
+## Failure boundaries
+
+Malformed JSON and UTF-8 are translated only around decoding. Invalid protocol parameters
+use checked `InvalidParamsException`; duplicate opens, capacity limits, and invalid document
+versions use checked `DocumentUpdateException`. The event loop retains notification evidence
+or sends InvalidParams for requests. Rejected updates leave accepted snapshots unchanged.
+Transport and interruption failures use SessionException with their original cause;
+interruption restores the executing thread's flag. Unexpected runtime failures escape to the session context rather than masquerading as client
+errors. The catalog's published record validation remains unchanged and is translated only
+at source construction.
+
+The compiler checks its source argument and prepares its URI before acquiring compiler
+resources. Compiler setup, parsing, and resource closing translate I/O, runtime, linkage,
+and stack-overflow failures to the contract's ParseException: javac may fail on hostile source.
+Shrink's diagnostic mapping runs outside that translation scope so its defects remain visible.
+Framing retains IOException/EOFException for compatibility with its stream-oriented callers.
+The parser completion boundary catches Throwable to observe independently executing task
+failures after their logging context completes; process termination remains application policy.

@@ -5,6 +5,7 @@ import java.util.Collection;
 import work.archaic.service.compiler.v01.SourceSnapshot;
 import work.archaic.service.test.v02.*;
 import work.archaic.shrink.server.Documents;
+import work.archaic.shrink.server.DocumentUpdateException;
 
 public record DocumentsTest() implements TestSuite {
   @Override public void cases(Collection<TestCase> cases) {
@@ -12,6 +13,7 @@ public record DocumentsTest() implements TestSuite {
     cases.add(new CloseReopenInvalidatesReusedVersions());
     cases.add(new EditsDoNotStarveOtherDocuments());
     cases.add(new RejectsOutOfOrderVersions());
+    cases.add(new RejectedOpensPreserveAcceptedDocuments());
   }
 
   static SourceSnapshot source(String name) {
@@ -20,7 +22,7 @@ public record DocumentsTest() implements TestSuite {
 }
 
 record DebouncesAndRejectsObsoleteWork() implements TestCase {
-  @Override public void run(TestTrail trail) {
+  @Override public void run(TestTrail trail) throws DocumentUpdateException {
     var docs = new Documents(150);
     var source = DocumentsTest.source("A");
     docs.open(source, 1, 0);
@@ -40,7 +42,7 @@ record DebouncesAndRejectsObsoleteWork() implements TestCase {
 }
 
 record CloseReopenInvalidatesReusedVersions() implements TestCase {
-  @Override public void run(TestTrail trail) {
+  @Override public void run(TestTrail trail) throws DocumentUpdateException {
     var docs = new Documents(0);
     var source = DocumentsTest.source("A");
     docs.open(source, 1, 0);
@@ -58,7 +60,7 @@ record CloseReopenInvalidatesReusedVersions() implements TestCase {
 }
 
 record EditsDoNotStarveOtherDocuments() implements TestCase {
-  @Override public void run(TestTrail trail) {
+  @Override public void run(TestTrail trail) throws DocumentUpdateException {
     var docs = new Documents(150);
     var a = DocumentsTest.source("A");
     var b = DocumentsTest.source("B");
@@ -73,14 +75,44 @@ record EditsDoNotStarveOtherDocuments() implements TestCase {
 }
 
 record RejectsOutOfOrderVersions() implements TestCase {
-  @Override public void run(TestTrail trail) {
+  @Override public void run(TestTrail trail) throws DocumentUpdateException {
     var docs = new Documents(0);
     var source = DocumentsTest.source("A");
     docs.open(source, 5, 0);
     boolean rejected = false;
-    try { docs.change(source.uri(), 4, "broken", 0); } catch (IllegalArgumentException expected) { rejected = true; }
+    try { docs.change(source.uri(), 4, "broken", 0); } catch (DocumentUpdateException expected) { rejected = true; }
     assert rejected : "Non-increasing document versions must be rejected";
     assert docs.takeReady(0).source().equals(source) : "Rejected edits must preserve accepted work";
     trail.note("Verified LSP document-version ordering");
+  }
+}
+
+
+record RejectedOpensPreserveAcceptedDocuments() implements TestCase {
+  @Override public void run(TestTrail trail) throws DocumentUpdateException {
+    var docs = new Documents(0);
+    var first = DocumentsTest.source("First");
+    docs.open(first, 1, 0);
+    try {
+      docs.open(new SourceSnapshot(first.uri(), first.fileName(), "broken"), 2, 0);
+      assert false : "Duplicate opens must be rejected";
+    } catch (DocumentUpdateException expected) { }
+    assert docs.takeReady(0).source().equals(first) : "Rejected duplicate open must preserve accepted text";
+    for (int i = 1; i < 128; i++) docs.open(DocumentsTest.source("File" + i), 1, 0);
+    var overflow = DocumentsTest.source("Overflow");
+    try {
+      docs.open(overflow, 1, 0);
+      assert false : "Opening a 129th document must be rejected";
+    } catch (DocumentUpdateException expected) { }
+    try {
+      docs.change(overflow.uri(), 2, "broken", 0);
+      assert false : "Rejected open must not create a document";
+    } catch (DocumentUpdateException expected) { }
+    docs.close(first.uri());
+    docs.open(overflow, 1, 0);
+    int pending = 0;
+    while (docs.takeReady(0) != null) pending++;
+    assert pending == 128 : "Rejection must preserve pending work and allow a later valid open";
+    trail.note("Verified checked document rejection before snapshot mutation");
   }
 }
